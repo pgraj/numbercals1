@@ -1,7 +1,9 @@
 """Period & amplitude — Trigonometric Functions & Graphs cluster (Stage 2).
 
 From y = A·sin(Bx), report amplitude |A| and period 360/|B| (and 2π/|B| in
-radians), with the wave stretching or compressing as B and A change.
+radians). Accepts `angle_unit` ("deg"|"rad"): the period is led in the chosen
+unit and the graph x-axis is relabelled to match (π-fractions in radians). The
+amplitude is a pure number, unaffected by the angle unit.
 """
 import math
 
@@ -23,9 +25,9 @@ DISCLAIMER = (
     order=0,
     summary=(
         "Find the amplitude and period of a wave y = A sin(Bx): the amplitude is "
-        "the absolute value of A and the period is 360 degrees divided by the "
-        "absolute value of B, shown with a wave that stretches or compresses as "
-        "you change A and B."
+        "the absolute value of A and the period is 360 degrees (or 2π radians) "
+        "divided by the absolute value of B, shown with a wave that stretches or "
+        "compresses as you change A and B, with the x-axis in degrees or radians."
     ),
     formula="amplitude = |A| · period = 360°/|B| = 2π/|B|",
     tags=[
@@ -36,8 +38,10 @@ DISCLAIMER = (
     ],
     viz_template="viz/trig-period-amplitude.html",
 )
-def compute(A=1, B=1):
+def compute(A=1, B=1, angle_unit="deg"):
     try:
+        unit = "rad" if str(angle_unit) == "rad" else "deg"
+
         def num(v, dflt):
             if v is None or v == "":
                 return dflt
@@ -52,21 +56,39 @@ def compute(A=1, B=1):
         period_deg = 360.0 / abs(B)
         period_rad = 2 * math.pi / abs(B)
 
+        if unit == "rad":
+            period_step = {
+                "label": "Period from B (radians)",
+                "math": r"\(T = \dfrac{2\pi}{|B|} = \dfrac{2\pi}{%s} = %s\,\text{rad}\)"
+                        % (_fmt(abs(B)), _fmt(period_rad)),
+                "note": "Larger B means more cycles in the same span — a shorter period."}
+            alt_step = {
+                "label": "Period in degrees",
+                "math": r"\(T = \dfrac{360^\circ}{|B|} = %s^\circ\)" % _fmt(period_deg),
+                "note": "The same period expressed in degrees."}
+            result = "amplitude %s, period %s rad" % (_fmt(amplitude), _fmt(period_rad))
+        else:
+            period_step = {
+                "label": "Period from B (degrees)",
+                "math": r"\(T = \dfrac{360^\circ}{|B|} = \dfrac{360^\circ}{%s} = %s^\circ\)"
+                        % (_fmt(abs(B)), _fmt(period_deg)),
+                "note": "Larger B means more cycles in the same span — a shorter period."}
+            alt_step = {
+                "label": "Period in radians",
+                "math": r"\(T = \dfrac{2\pi}{|B|} = %s\,\text{rad}\)" % _fmt(period_rad),
+                "note": "The same period expressed in radians."}
+            result = "amplitude %s, period %s\u00b0" % (_fmt(amplitude), _fmt(period_deg))
+
         steps = [
             {"label": "Amplitude from A",
              "math": r"\(\text{amplitude} = |A| = %s\)" % _fmt(amplitude),
              "note": "The wave rises this far above and below the centre line."},
-            {"label": "Period from B (degrees)",
-             "math": r"\(T = \dfrac{360^\circ}{|B|} = \dfrac{360^\circ}{%s} = %s^\circ\)"
-                     % (_fmt(abs(B)), _fmt(period_deg)),
-             "note": "Larger B means more cycles in the same span — a shorter period."},
-            {"label": "Period in radians",
-             "math": r"\(T = \dfrac{2\pi}{|B|} = %s\)" % _fmt(period_rad),
-             "note": "The same period expressed in radians."},
+            period_step,
+            alt_step,
         ]
         return {
-            "result": "amplitude %s, period %s\u00b0" % (_fmt(amplitude), _fmt(period_deg)),
-            "A": A, "B": B,
+            "result": result,
+            "A": A, "B": B, "angle_unit": unit,
             "amplitude": round(amplitude, 6),
             "period_deg": round(period_deg, 6),
             "period_rad": round(period_rad, 6),
@@ -77,8 +99,13 @@ def compute(A=1, B=1):
                          "the midline to a peak. Period measures how wide one full "
                          "cycle is before the pattern repeats. They are independent: "
                          "changing one does not affect the other."},
+                {"heading": "Degrees or radians",
+                 "body": "The period is the same physical width either way: 360°/|B| "
+                         "and 2π/|B| describe the identical cycle. Radians are the "
+                         "natural choice for the wave's x-axis in higher mathematics, "
+                         "where the axis is marked in multiples of π."},
                 {"heading": "B and frequency",
-                 "body": "The number B counts how many full waves fit in 360°. "
+                 "body": "The number B counts how many full waves fit in one turn. "
                          "Doubling B halves the period and doubles the frequency, "
                          "squeezing twice as many cycles into the same space."},
             ],

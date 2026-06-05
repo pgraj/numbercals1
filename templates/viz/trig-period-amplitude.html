@@ -1,5 +1,6 @@
 <link rel="stylesheet" href="/static/nclearn.css">
 <div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
   <div class="viz-inputs">
     <label>A (amplitude)
       <span class="nc-field"><input id="pa-A" type="range" value="1" min="0.5" max="5" step="0.5" style="width:150px"><span id="pa-Av" style="margin-left:6px"></span></span></label>
@@ -36,6 +37,8 @@
 })();
 </script>
 
+<script src="/static/ncangle.js"></script>
+
 <script>
 (function(){
   const $ = id => document.getElementById(id);
@@ -56,9 +59,11 @@
     const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
   }
 
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
+
   function buildBody(){
     $("pa-Av").textContent=$("pa-A").value; $("pa-Bv").textContent=$("pa-B").value;
-    return { A:$("pa-A").value, B:$("pa-B").value };
+    return { A:$("pa-A").value, B:$("pa-B").value, angle_unit:unit() };
   }
 
   async function update(){
@@ -70,7 +75,9 @@
     try { if(window.NCSteps) window.NCSteps.render(data.steps||[]); } catch(e){}
     if (data.disclaimer) $(P+"-disc").textContent="\u26a0 "+data.disclaimer;
     if (data.error){ $(P+"-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} drawDiagram(null); last=null; mountLearn(null); return; }
-    $(P+"-out").innerHTML = '<b>amplitude '+fmt(data.amplitude)+', period '+fmt(data.period_deg)+'\u00b0</b>  ('+fmt(data.period_rad)+' rad)';
+    $(P+"-out").innerHTML = (unit()==="rad")
+      ? '<b>amplitude '+fmt(data.amplitude)+', period '+fmt(data.period_rad)+' rad</b>  ('+fmt(data.period_deg)+'\u00b0)'
+      : '<b>amplitude '+fmt(data.amplitude)+', period '+fmt(data.period_deg)+'\u00b0</b>  ('+fmt(data.period_rad)+' rad)';
     try{ window.__ncExplain(data.explanation);}catch(e){}
     last=data; drawDiagram(data); mountLearn(data);
   }
@@ -81,6 +88,26 @@
   }
 
   function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
+
+  // Label a degree value as a clean π-fraction in radians at the standard ticks.
+  // 0->0, 180->π, 360->2π, 90->π/2, 270->3π/2, 540->3π, 720->4π, etc.
+  function radLabel(deg){
+    if(Math.abs(deg)<1e-9) return "0";
+    // express deg/180 as a fraction n/d of π
+    const ratio = deg/180;            // multiples of π
+    // try small denominators
+    for(let d=1; d<=4; d++){
+      const n = ratio*d;
+      if(Math.abs(n-Math.round(n))<1e-9){
+        const nn=Math.round(n);
+        if(d===1) return (nn===1?"π":nn+"π");
+        if(nn===1) return "π/"+d;
+        return nn+"π/"+d;
+      }
+    }
+    return (Math.round(ratio*100)/100)+"π";
+  }
+  function axisLabel(deg){ return (unit()==="rad") ? radLabel(deg) : (deg+"\u00b0"); }
 
   // Shared auto-fit: given natural-coordinate points [{x,y},...] and the canvas,
   // return a mapper m(p)->{x,y} that centres and scales them to fill the box
@@ -110,7 +137,7 @@
     const yscale=(H/2 - 30)/reach;
     function gx(a){ return x0+(a/xmax)*(x1-x0); } function gy(v){ return cy - v*yscale; }
     ctx.strokeStyle=rule; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x0,cy); ctx.lineTo(x1,cy); ctx.stroke();
-    ctx.fillStyle=soft; ctx.font="10px "+(s.sans||"sans-serif"); ctx.textAlign="center"; [0,180,360,540,720].forEach(a=>ctx.fillText(a+"\u00b0",gx(a),H-6));
+    ctx.fillStyle=soft; ctx.font="10px "+(s.sans||"sans-serif"); ctx.textAlign="center"; [0,180,360,540,720].forEach(a=>ctx.fillText(axisLabel(a),gx(a),H-6));
     // amplitude guide lines
     ctx.strokeStyle=paper2; ctx.setLineDash([3,3]); [d.amplitude,-d.amplitude].forEach(v=>{ ctx.beginPath(); ctx.moveTo(x0,gy(v)); ctx.lineTo(x1,gy(v)); ctx.stroke(); }); ctx.setLineDash([]);
     ctx.strokeStyle=accent; ctx.lineWidth=2.5; ctx.beginPath();
@@ -119,7 +146,9 @@
     // mark one period
     const Tpx=gx(d.period_deg);
     ctx.strokeStyle=yes; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(gx(0),H-26); ctx.lineTo(Tpx,H-26); ctx.stroke();
-    ctx.fillStyle=yes; ctx.font="12px "+(s.sans||"sans-serif"); ctx.textAlign="center"; ctx.fillText("period "+fmt(d.period_deg)+"\u00b0", (gx(0)+Tpx)/2, H-30);
+    ctx.fillStyle=yes; ctx.font="12px "+(s.sans||"sans-serif"); ctx.textAlign="center";
+    var perLbl = (unit()==="rad") ? ("period "+fmt(d.period_rad)+" rad") : ("period "+fmt(d.period_deg)+"\u00b0");
+    ctx.fillText(perLbl, (gx(0)+Tpx)/2, H-30);
     ctx.fillStyle=ink; ctx.font="bold 13px "+(s.mono||"monospace"); ctx.textAlign="left"; ctx.fillText("y = "+fmt(d.A)+"\u00b7sin("+fmt(d.B)+"x)", x0+4, 16);
     if(cap) cap.textContent="Dashed lines mark the amplitude; the green bar marks one period. The graph auto-scales so any amplitude fits.";
   }
@@ -128,6 +157,7 @@
   function drawFrame(ctx,t,d){ if(!d) return; drawWave(d, t<0.85? t/0.85:1); }
 
   ["pa-A","pa-B"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  if(window.NCAngle){ NCAngle.onChange(function(){ update(); }); }
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawWave(last,1); });
   window.addEventListener("nc-theme-change", styleFields);
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });

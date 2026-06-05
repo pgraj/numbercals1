@@ -1,5 +1,6 @@
 <link rel="stylesheet" href="/static/nclearn.css">
 <div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
   <div class="viz-inputs">
     <label>A (amplitude = loudness)
       <span class="nc-field"><input id="tf-A" type="range" value="2" min="-5" max="5" step="0.5" style="width:140px"><span id="tf-Av" style="margin-left:6px"></span></span></label>
@@ -40,6 +41,8 @@
 })();
 </script>
 
+<script src="/static/ncangle.js"></script>
+
 <script>
 (function(){
   const $ = id => document.getElementById(id);
@@ -60,9 +63,11 @@
     const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
   }
 
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
+
   function buildBody(){
     $("tf-Av").textContent=$("tf-A").value; $("tf-Bv").textContent=$("tf-B").value; $("tf-Cv").textContent=$("tf-C").value+"\u00b0"; $("tf-Dv").textContent=$("tf-D").value;
-    return { A:$("tf-A").value, B:$("tf-B").value, C:$("tf-C").value, D:$("tf-D").value };
+    return { A:$("tf-A").value, B:$("tf-B").value, C:$("tf-C").value, D:$("tf-D").value, angle_unit:unit() };
   }
 
   async function update(){
@@ -74,7 +79,9 @@
     try { if(window.NCSteps) window.NCSteps.render(data.steps||[]); } catch(e){}
     if (data.disclaimer) $(P+"-disc").textContent="\u26a0 "+data.disclaimer;
     if (data.error){ $(P+"-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} drawDiagram(null); last=null; mountLearn(null); return; }
-    $(P+"-out").innerHTML = '<b>amplitude '+fmt(data.amplitude)+', period '+fmt(data.period_deg)+'\u00b0, phase '+fmt(data.phase_deg)+'\u00b0, midline '+fmt(data.midline)+'</b>';
+    $(P+"-out").innerHTML = (unit()==="rad")
+      ? '<b>amplitude '+fmt(data.amplitude)+', period '+fmt(data.period_rad)+' rad, phase '+fmt(data.phase_rad)+' rad, midline '+fmt(data.midline)+'</b>'
+      : '<b>amplitude '+fmt(data.amplitude)+', period '+fmt(data.period_deg)+'\u00b0, phase '+fmt(data.phase_deg)+'\u00b0, midline '+fmt(data.midline)+'</b>';
     try{ window.__ncExplain(data.explanation);}catch(e){}
     last=data; drawDiagram(data); mountLearn(data);
   }
@@ -85,6 +92,22 @@
   }
 
   function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
+
+  function radLabel(deg){
+    if(Math.abs(deg)<1e-9) return "0";
+    const ratio = deg/180;
+    for(let d=1; d<=4; d++){
+      const n = ratio*d;
+      if(Math.abs(n-Math.round(n))<1e-9){
+        const nn=Math.round(n);
+        if(d===1) return (nn===1?"π":nn+"π");
+        if(nn===1) return "π/"+d;
+        return nn+"π/"+d;
+      }
+    }
+    return (Math.round(ratio*100)/100)+"π";
+  }
+  function axisLabel(deg){ return (unit()==="rad") ? radLabel(deg) : (deg+"\u00b0"); }
 
   // Shared auto-fit: given natural-coordinate points [{x,y},...] and the canvas,
   // return a mapper m(p)->{x,y} that centres and scales them to fill the box
@@ -117,7 +140,7 @@
     function gy(v){ return cy - v*yscale; }
     // axes + midline
     ctx.strokeStyle=rule; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x0,cy); ctx.lineTo(x1,cy); ctx.stroke();
-    ctx.fillStyle=soft; ctx.font="10px "+(s.sans||"sans-serif"); ctx.textAlign="center"; [0,180,360,540,720].forEach(a=>ctx.fillText(a+"\u00b0",gx(a),H-6));
+    ctx.fillStyle=soft; ctx.font="10px "+(s.sans||"sans-serif"); ctx.textAlign="center"; [0,180,360,540,720].forEach(a=>ctx.fillText(axisLabel(a),gx(a),H-6));
     // midline (D)
     ctx.strokeStyle=paper2; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.moveTo(x0,gy(d.D)); ctx.lineTo(x1,gy(d.D)); ctx.stroke(); ctx.setLineDash([]);
     // baseline sine (faint)
@@ -136,6 +159,7 @@
   function drawFrame(ctx,t,d){ if(!d) return; drawWave(d, t<0.85? t/0.85 : 1); }
 
   ["tf-A","tf-B","tf-C","tf-D"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  if(window.NCAngle){ NCAngle.onChange(function(){ update(); }); }
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawWave(last,1); });
   window.addEventListener("nc-theme-change", styleFields);
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });
