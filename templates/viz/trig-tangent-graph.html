@@ -1,8 +1,9 @@
 <link rel="stylesheet" href="/static/nclearn.css">
 <div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
   <div class="viz-inputs">
-    <label>Angle x (degrees)
-      <span class="nc-field"><input id="tg-deg" type="number" value="45" step="any"></span></label>
+    <label><span style="display:block;white-space:nowrap">Angle x <span id="tg-unit-lbl" style="opacity:.7">(deg)</span></span>
+      <span class="nc-field" style="display:block"><input id="tg-deg" type="number" value="45" step="any"></span></label>
     <label>Drag
       <span class="nc-field"><input id="tg-range" type="range" value="45" min="-180" max="180" step="1" style="width:200px"></span></label>
   </div>
@@ -36,6 +37,8 @@
 })();
 </script>
 
+<script src="/static/ncangle.js"></script>
+
 <script>
 (function(){
   const $ = id => document.getElementById(id);
@@ -56,8 +59,10 @@
     const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
   }
 
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
+
   function buildBody(){
-    return { angle_deg:$("tg-deg").value };
+    return { angle_deg:$("tg-deg").value, angle_unit:unit() };
   }
 
   async function update(){
@@ -69,7 +74,7 @@
     try { if(window.NCSteps) window.NCSteps.render(data.steps||[]); } catch(e){}
     if (data.disclaimer) $(P+"-disc").textContent="\u26a0 "+data.disclaimer;
     if (data.error){ $(P+"-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} drawDiagram(null); last=null; mountLearn(null); return; }
-    $(P+"-out").innerHTML = '<b>tan '+fmt(data.x)+'\u00b0 = '+(data.undefined?'undefined':data.result)+'</b>';
+    $(P+"-out").innerHTML = '<b>tan '+(unit()==="rad"?(fmt(data.x*Math.PI/180)+" rad"):(fmt(data.x)+"\u00b0"))+' = '+(data.undefined?'undefined':data.result)+'</b>';
     try{ window.__ncExplain(data.explanation);}catch(e){}
     last=data; drawDiagram(data); mountLearn(data);
   }
@@ -80,6 +85,14 @@
   }
 
   function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
+
+  function radLabel(deg){
+    if(Math.abs(deg)<1e-9) return "0";
+    const ratio=deg/180;
+    for(let d=1; d<=4; d++){ const n=ratio*d; if(Math.abs(n-Math.round(n))<1e-9){ const nn=Math.round(n); if(d===1) return (nn===1?"π":(nn===-1?"-π":nn+"π")); if(nn===1) return "π/"+d; if(nn===-1) return "-π/"+d; return nn+"π/"+d; } }
+    return (Math.round(ratio*100)/100)+"π";
+  }
+  function axisLabel(deg){ return (unit()==="rad") ? radLabel(deg) : (deg+"\u00b0"); }
 
   // Shared auto-fit: given natural-coordinate points [{x,y},...] and the canvas,
   // return a mapper m(p)->{x,y} that centres and scales them to fill the box
@@ -109,7 +122,7 @@
     // grid + axes
     ctx.strokeStyle=rule; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x0,cy); ctx.lineTo(x1,cy); ctx.stroke();
     ctx.fillStyle=soft; ctx.font="10px "+(s.sans||"sans-serif"); ctx.textAlign="center";
-    [-180,-90,0,90,180].forEach(a=>{ ctx.fillText(a+"\u00b0", gx(a), cy+H/2-6); });
+    [-180,-90,0,90,180].forEach(a=>{ ctx.fillText(axisLabel(a), gx(a), cy+H/2-6); });
     // asymptotes at -90, 90
     ctx.strokeStyle=rule; ctx.setLineDash([5,5]); [-90,90].forEach(a=>{ ctx.beginPath(); ctx.moveTo(gx(a),20); ctx.lineTo(gx(a),H-20); ctx.stroke(); }); ctx.setLineDash([]);
     const cap=$(P+"-cap"); if(!d){ if(cap) cap.textContent=""; return; }
@@ -121,18 +134,21 @@
     });
     if(!d.undefined){ const X=gx(d.x), Y=gy(d.y); ctx.fillStyle=accent; ctx.beginPath(); ctx.arc(X,Y,5,0,Math.PI*2); ctx.fill();
       ctx.fillStyle=ink; ctx.font="bold 13px "+(s.mono||"monospace"); ctx.textAlign="left"; ctx.fillText("tan="+fmt(d.y), X+8, Y-6); }
-    else { ctx.fillStyle=soft; ctx.font="13px "+(s.sans||"sans-serif"); ctx.textAlign="center"; ctx.fillText("undefined at "+fmt(d.x)+"\u00b0", W/2, 26); }
+    else { ctx.fillStyle=soft; ctx.font="13px "+(s.sans||"sans-serif"); ctx.textAlign="center"; ctx.fillText("undefined at "+(unit()==="rad"?(fmt(d.x*Math.PI/180)+" rad"):(fmt(d.x)+"\u00b0")), W/2, 26); }
     if(cap) cap.textContent="Tangent repeats every 180\u00b0 and shoots to infinity at the dashed asymptotes (where cos = 0). Angles are measured anticlockwise by convention; tan = sin/cos, so it is undefined wherever cosine crosses zero.";
   }
 
 
   function drawFrame(ctx,t,d){ if(!d) return; drawCurve(d); }
 
-  function syncD(){ const v=Math.max(-180,Math.min(180,Math.round(+$("tg-deg").value||0))); $("tg-range").value=v; }
-  function syncR(){ $("tg-deg").value=$("tg-range").value; }
+  function fieldToDeg(){ const v=+$("tg-deg").value||0; return (unit()==="rad")? v*180/Math.PI : v; }
+  function syncD(){ $("tg-range").value=Math.max(-180,Math.min(180,Math.round(fieldToDeg()))); }
+  function syncR(){ const d=+$("tg-range").value; $("tg-deg").value=(unit()==="rad")? +(d*Math.PI/180).toFixed(4):d; }
+  function syncUnitLabel(){ $("tg-unit-lbl").textContent=(unit()==="rad")?"(rad)":"(deg)"; }
   $("tg-deg").addEventListener("input",()=>{syncD();update();}); $("tg-range").addEventListener("input",()=>{syncR();update();});
+  if(window.NCAngle){ NCAngle.onChange(function(nu){ const v=parseFloat($("tg-deg").value); if(!isNaN(v)){ $("tg-deg").value=(nu==="rad")?+(v*Math.PI/180).toFixed(4):+(v*180/Math.PI).toFixed(4);} syncUnitLabel(); update(); }); }
   window.addEventListener("nc-theme-change", styleFields);
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });
-  styleFields(); syncD(); update();
+  styleFields(); syncUnitLabel(); syncD(); update();
 })();
 </script>

@@ -1,8 +1,9 @@
 <link rel="stylesheet" href="/static/nclearn.css">
 <div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
   <div class="viz-inputs">
-    <label>Angle x (degrees)
-      <span class="nc-field"><input id="cg-deg" type="number" value="60" step="any"></span></label>
+    <label><span style="display:block;white-space:nowrap">Angle x <span id="cg-unit-lbl" style="opacity:.7">(deg)</span></span>
+      <span class="nc-field" style="display:block"><input id="cg-deg" type="number" value="60" step="any"></span></label>
     <label>Drag
       <span class="nc-field"><input id="cg-range" type="range" value="60" min="0" max="360" step="1" style="width:200px"></span></label>
   </div>
@@ -36,6 +37,8 @@
 })();
 </script>
 
+<script src="/static/ncangle.js"></script>
+
 <script>
 (function(){
   const $ = id => document.getElementById(id);
@@ -56,8 +59,10 @@
     const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
   }
 
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
+
   function buildBody(){
-    return { angle_deg:$("cg-deg").value };
+    return { angle_deg:$("cg-deg").value, angle_unit:unit() };
   }
 
   async function update(){
@@ -69,7 +74,7 @@
     try { if(window.NCSteps) window.NCSteps.render(data.steps||[]); } catch(e){}
     if (data.disclaimer) $(P+"-disc").textContent="\u26a0 "+data.disclaimer;
     if (data.error){ $(P+"-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} drawDiagram(null); last=null; mountLearn(null); return; }
-    $(P+"-out").innerHTML = '<b>cos '+fmt(data.x)+'\u00b0 = '+data.result+'</b>';
+    $(P+"-out").innerHTML = '<b>cos '+(unit()==="rad"?(fmt(data.x*Math.PI/180)+" rad"):(fmt(data.x)+"\u00b0"))+' = '+data.result+'</b>';
     try{ window.__ncExplain(data.explanation);}catch(e){}
     last=data; drawDiagram(data); mountLearn(data);
   }
@@ -80,6 +85,14 @@
   }
 
   function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
+
+  function radLabel(deg){
+    if(Math.abs(deg)<1e-9) return "0";
+    const ratio=deg/180;
+    for(let d=1; d<=4; d++){ const n=ratio*d; if(Math.abs(n-Math.round(n))<1e-9){ const nn=Math.round(n); if(d===1) return (nn===1?"π":(nn===-1?"-π":nn+"π")); if(nn===1) return "π/"+d; if(nn===-1) return "-π/"+d; return nn+"π/"+d; } }
+    return (Math.round(ratio*100)/100)+"π";
+  }
+  function axisLabel(deg){ return (unit()==="rad") ? radLabel(deg) : (deg+"\u00b0"); }
 
   // Shared auto-fit: given natural-coordinate points [{x,y},...] and the canvas,
   // return a mapper m(p)->{x,y} that centres and scales them to fill the box
@@ -106,7 +119,7 @@
     ctx.strokeStyle=soft; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(ccx,cy,R,0,Math.PI*2); ctx.stroke();
     ctx.strokeStyle=rule; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(gx0,cy); ctx.lineTo(gx1,cy); ctx.stroke(); ctx.beginPath(); ctx.moveTo(gx0,cy-R-15); ctx.lineTo(gx0,cy+R+15); ctx.stroke();
     ctx.strokeStyle=paper2; for(let a=90;a<=360;a+=90){ const gx=gx0+(a/360)*gw; ctx.beginPath(); ctx.moveTo(gx,cy-R-12); ctx.lineTo(gx,cy+R+12); ctx.stroke(); }
-    ctx.fillStyle=soft; ctx.font="10px "+(s.sans||"sans-serif"); ctx.textAlign="center"; [0,90,180,270,360].forEach(a=>{ const gx=gx0+(a/360)*gw; ctx.fillText(a+"\u00b0",gx,cy+R+28); });
+    ctx.fillStyle=soft; ctx.font="10px "+(s.sans||"sans-serif"); ctx.textAlign="center"; [0,90,180,270,360].forEach(a=>{ const gx=gx0+(a/360)*gw; ctx.fillText(axisLabel(a),gx,cy+R+28); });
     const cap=$(P+"-cap"); if(!d){ if(cap) cap.textContent=""; return; }
     // cosine = x-coord; plot horizontally-projected. curve up to angDeg
     ctx.strokeStyle=accent; ctx.lineWidth=2; ctx.beginPath();
@@ -119,19 +132,24 @@
     const cgx=gx0+(angDeg/360)*gw, cgy=cy-Math.cos(th)*R;
     ctx.setLineDash([4,4]); ctx.strokeStyle=accent; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(px,cy); ctx.lineTo(cgx,cgy); ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle=accent; ctx.beginPath(); ctx.arc(cgx,cgy,5,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle=ink; ctx.font="bold 13px "+(s.mono||"monospace"); ctx.textAlign="left"; ctx.fillText("x="+fmt(angDeg)+"\u00b0, y="+fmt(d.y), gx0+6, cy-R-2);
+    ctx.fillStyle=ink; ctx.font="bold 13px "+(s.mono||"monospace"); ctx.textAlign="left";
+    var xl=(unit()==="rad")?(fmt(angDeg*Math.PI/180)+" rad"):(fmt(angDeg)+"\u00b0");
+    ctx.fillText("x="+xl+", y="+fmt(d.y), gx0+6, cy-R-2);
     if(cap) cap.textContent="The horizontal reach of the point (its x-coordinate) is the cosine \u2014 drag or play to trace it. Angles run anticlockwise from the right (0\u00b0 \u2192 90\u00b0 top \u2192 180\u00b0 left), the standard convention; cosine starts at 1 because the point starts at the far right.";
   }
 
 
   function drawFrame(ctx,t,d){ if(!d) return; drawAt(d, 360 - t*360); }
 
-  function syncD(){ const v=Math.max(0,Math.min(360,Math.round(+$("cg-deg").value||0))); $("cg-range").value=v; }
-  function syncR(){ $("cg-deg").value=$("cg-range").value; }
+  function fieldToDeg(){ const v=+$("cg-deg").value||0; return (unit()==="rad")? v*180/Math.PI : v; }
+  function syncD(){ $("cg-range").value=Math.max(0,Math.min(360,Math.round(fieldToDeg()))); }
+  function syncR(){ const d=+$("cg-range").value; $("cg-deg").value=(unit()==="rad")? +(d*Math.PI/180).toFixed(4):d; }
+  function syncUnitLabel(){ $("cg-unit-lbl").textContent=(unit()==="rad")?"(rad)":"(deg)"; }
   $("cg-deg").addEventListener("input",()=>{syncD();update();}); $("cg-range").addEventListener("input",()=>{syncR();update();});
+  if(window.NCAngle){ NCAngle.onChange(function(nu){ const v=parseFloat($("cg-deg").value); if(!isNaN(v)){ $("cg-deg").value=(nu==="rad")?+(v*Math.PI/180).toFixed(4):+(v*180/Math.PI).toFixed(4);} syncUnitLabel(); update(); }); }
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawAt(last,last.x); });
   window.addEventListener("nc-theme-change", styleFields);
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });
-  styleFields(); syncD(); update();
+  styleFields(); syncUnitLabel(); syncD(); update();
 })();
 </script>

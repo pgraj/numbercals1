@@ -1,8 +1,9 @@
 <link rel="stylesheet" href="/static/nclearn.css">
 <div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
   <div class="viz-inputs">
-    <label>Angle x (degrees)
-      <span class="nc-field"><input id="sg-deg" type="number" value="30" step="any"></span>
+    <label><span style="display:block;white-space:nowrap">Angle x <span id="sg-unit-lbl" style="opacity:.7">(deg)</span></span>
+      <span class="nc-field" style="display:block"><input id="sg-deg" type="number" value="30" step="any"></span>
     </label>
     <label>Drag
       <span class="nc-field"><input id="sg-range" type="range" value="30" min="0" max="360" step="1" style="width:200px"></span>
@@ -38,6 +39,8 @@
 })();
 </script>
 
+<script src="/static/ncangle.js"></script>
+
 <script>
 (function(){
   const $ = id => document.getElementById(id);
@@ -57,15 +60,17 @@
     const d=$("sg-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
   }
 
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
+
   async function update(){
-    const body = { angle_deg: $("sg-deg").value };
+    const body = { angle_deg: $("sg-deg").value, angle_unit: unit() };
     let data;
     try { const r=await fetch("/api/compute/"+slug,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
     catch(e){ $("sg-out").textContent="compute error"; return; }
     try { if(window.NCSteps) window.NCSteps.render(data.steps||[]); } catch(e){}
     if (data.disclaimer) $("sg-disc").textContent="\u26a0 "+data.disclaimer;
     if (data.error){ $("sg-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} drawAt(null,0); last=null; mountLearn(null); return; }
-    $("sg-out").innerHTML="<b>sin "+fmt(data.x)+"° = "+data.result+"</b>";
+    $("sg-out").innerHTML="<b>sin "+(unit()==="rad"?(fmt(data.x*Math.PI/180)+" rad"):(fmt(data.x)+"\u00b0"))+" = "+data.result+"</b>";
     try{ window.__ncExplain(data.explanation);}catch(e){}
     last=data; drawAt(data, data.x); mountLearn(data);
   }
@@ -99,7 +104,7 @@
     ctx.strokeStyle=paper2; ctx.lineWidth=1;
     for(let a=90;a<=360;a+=90){ const gx=gx0+(a/360)*gw; ctx.beginPath(); ctx.moveTo(gx,cy-R-12); ctx.lineTo(gx,cy+R+12); ctx.stroke(); }
     ctx.fillStyle=soft; ctx.font="10px "+(s.sans||"sans-serif"); ctx.textAlign="center";
-    [0,90,180,270,360].forEach(a=>{ const gx=gx0+(a/360)*gw; ctx.fillText(a+"°", gx, cy+R+28); });
+    [0,90,180,270,360].forEach(a=>{ const gx=gx0+(a/360)*gw; ctx.fillText(axisLabel(a), gx, cy+R+28); });
     const cap=$("sg-cap");
     if(!d){ if(cap) cap.textContent=""; return; }
 
@@ -136,7 +141,8 @@
     ctx.fillStyle=yes; ctx.font="12px "+(s.sans||"sans-serif"); ctx.textAlign="left";
     ctx.fillText("sin = "+fmt(d.y), px+8, (cy+py)/2);
     ctx.fillStyle=ink; ctx.font="bold 13px "+(s.mono||"monospace"); ctx.textAlign="left";
-    ctx.fillText("x="+fmt(angDeg)+"°,  y="+fmt(d.y), gx0+6, cy-R-2);
+    var xl=(unit()==="rad")?(fmt(angDeg*Math.PI/180)+" rad"):(fmt(angDeg)+"\u00b0");
+    ctx.fillText("x="+xl+",  y="+fmt(d.y), gx0+6, cy-R-2);
     if(cap) cap.textContent="The point's height on the circle (green) is its sine — drag or play to trace the wave.";
   }
 
@@ -144,13 +150,24 @@
 
   function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
 
-  function syncDeg(){ const v=Math.max(0,Math.min(360,Math.round(+$("sg-deg").value||0))); $("sg-range").value=v; }
-  function syncRange(){ $("sg-deg").value=$("sg-range").value; }
+  function radLabel(deg){
+    if(Math.abs(deg)<1e-9) return "0";
+    const ratio=deg/180;
+    for(let d=1; d<=4; d++){ const n=ratio*d; if(Math.abs(n-Math.round(n))<1e-9){ const nn=Math.round(n); if(d===1) return (nn===1?"π":(nn===-1?"-π":nn+"π")); if(nn===1) return "π/"+d; if(nn===-1) return "-π/"+d; return nn+"π/"+d; } }
+    return (Math.round(ratio*100)/100)+"π";
+  }
+  function axisLabel(deg){ return (unit()==="rad") ? radLabel(deg) : (deg+"\u00b0"); }
+
+  function fieldToDeg(){ const v=+$("sg-deg").value||0; return (unit()==="rad")? v*180/Math.PI : v; }
+  function syncDeg(){ $("sg-range").value = Math.max(0,Math.min(360,Math.round(fieldToDeg()))); }
+  function syncRange(){ const d=+$("sg-range").value; $("sg-deg").value=(unit()==="rad")? +(d*Math.PI/180).toFixed(4) : d; }
+  function syncUnitLabel(){ $("sg-unit-lbl").textContent=(unit()==="rad")?"(rad)":"(deg)"; }
 
   $("sg-deg").addEventListener("input", ()=>{ syncDeg(); update(); });
   $("sg-range").addEventListener("input", ()=>{ syncRange(); update(); });
+  if(window.NCAngle){ NCAngle.onChange(function(nu){ const v=parseFloat($("sg-deg").value); if(!isNaN(v)){ $("sg-deg").value=(nu==="rad")?+(v*Math.PI/180).toFixed(4):+(v*180/Math.PI).toFixed(4);} syncUnitLabel(); update(); }); }
   window.addEventListener("nc-theme-change", styleFields);
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawAt(last, last.x); });
-  styleFields(); syncDeg(); update();
+  styleFields(); syncUnitLabel(); syncDeg(); update();
 })();
 </script>

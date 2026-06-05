@@ -9,7 +9,8 @@ register_faqs("trig-cosine-graph", [
           "sin(x + 90°). They share the same amplitude, period, and range."},
     {"q": "Can you give a worked example?",
      "a": "At x = 60°, y = cos 60° = 0.5, so the point (60°, 0.5) lies on the "
-          "curve. At x = 0° the curve is at its maximum, y = 1."},
+          "curve. The same angle in radians is 60° = π/3 ≈ 1.0472 rad; the "
+          "Degrees/Radians toggle marks the x-axis in multiples of π."},
     {"q": "What are its amplitude and period?",
      "a": "Amplitude 1 (it ranges between −1 and 1) and period 360° or 2π radians, "
           "after which the wave repeats exactly."},

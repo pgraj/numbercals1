@@ -11,7 +11,8 @@ register_faqs("trig-sine-graph", [
           "repeats every full turn."},
     {"q": "Can you give a worked example?",
      "a": "At x = 30°, y = sin 30° = 0.5, so the point (30°, 0.5) lies on the "
-          "curve. At x = 90° the curve reaches its peak, y = 1."},
+          "curve. The same angle in radians is 30° = π/6 ≈ 0.5236 rad; switch the "
+          "Degrees/Radians toggle and the x-axis is marked in multiples of π."},
     {"q": "How does the unit circle make the wave?",
      "a": "The sine of an angle is the height of the matching point on the unit "
           "circle. As the point goes round, its height traces out the wave — which "
