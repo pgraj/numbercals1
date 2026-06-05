@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ scholar.name }} · {{ site_name }}{% endblock %}
+{% block description %}{{ scholar.blurb }}{% endblock %}
+{% block content %}
+<p class="eyebrow">// minds behind maths</p>
+<h1>{{ scholar.name }}</h1>
+<p class="count-pill">{{ scholar.era }}{% if scholar.field_of %} · {{ scholar.field_of }}{% endif %}</p>
+<p class="lede">{{ scholar.blurb }}</p>
+{% if scholar.source_url %}
+<p class="citation">Source:
+  <a href="{{ scholar.source_url }}" target="_blank" rel="noopener">{{ scholar.source_name }}</a>
+</p>
+{% endif %}
+{% if linked %}
+<h2>Formulas that trace back to {{ scholar.name }}</h2>
+{% for c in linked %}
+  <div class="calc-row">
+    <a href="{{ c.url }}">{{ c.name }}</a>
+    <span class="formula">{{ c.formula }}</span>
+  </div>
+{% endfor %}
+{% else %}
+<p class="citation">Calculators linking to {{ scholar.name }} will appear here as
+  their formulas are added.</p>
+{% endif %}
+{% endblock %}

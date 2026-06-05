@@ -1,0 +1,112 @@
+{# Mortgage pie: monthly payment split into P&I, tax, insurance. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Home price<input id="in-home_price" type="number" value="500000" step="5000" min="1"></label>
+    <label>Down payment<input id="in-down_payment" type="number" value="100000" step="5000" min="0"></label>
+    <label>Years<input id="in-years" type="number" value="30" step="1" min="1"></label>
+    <label>Rate %<input id="in-rate_pct" type="number" value="6" step="0.1" min="0"></label>
+    <label>Annual tax<input id="in-annual_tax" type="number" value="3000" step="100" min="0"></label>
+    <label>Annual insurance<input id="in-annual_insurance" type="number" value="1200" step="100" min="0"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="mort-chart" width="640" height="380" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="mort-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg;
+      el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px";
+      el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("mort-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = {
+      home_price:+$("in-home_price").value,
+      down_payment:+$("in-down_payment").value,
+      years:+$("in-years").value,
+      rate_pct:+$("in-rate_pct").value,
+      annual_tax:+$("in-annual_tax").value,
+      annual_insurance:+$("in-annual_insurance").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    if (window.NCSteps) window.NCSteps.render(data.steps || []);
+
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("mort-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height);
+      return;
+    }
+    $("viz-out").innerHTML =
+      `Monthly payment: <b>${data.monthly_payment}</b> &nbsp;(P&I ${data.principal_interest}, ` +
+      `tax ${data.monthly_tax}, insurance ${data.monthly_insurance})`;
+    $("mort-caption").innerHTML =
+      `The whole pie is a single month's payment. The big slice is principal & interest — the ` +
+      `loan itself. The smaller slices are the monthly share of property tax and insurance, ` +
+      `which stay even as the loan shrinks. Raise the tax or insurance to watch those slices grow.`;
+    draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const cx=cv.width/2, cy=cv.height/2+6, R=Math.min(cv.width,cv.height)/2-50;
+    const segs=[
+      {label:"Principal & interest", val:d.principal_interest, col:NCSkin.accent},
+      {label:"Tax",       val:d.monthly_tax, col:NCSkin.inkSoft},
+      {label:"Insurance", val:d.monthly_insurance, col:NCSkin.yes},
+    ].filter(s=>s.val>0);
+    const total = segs.reduce((a,s)=>a+s.val,0);
+    if(total<=0) return;
+    let a0=-Math.PI/2;
+    segs.forEach(s=>{
+      const a1=a0+(s.val/total)*2*Math.PI;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,R,a0,a1); ctx.closePath();
+      ctx.fillStyle=s.col; ctx.fill();
+      // label at mid-angle
+      const mid=(a0+a1)/2;
+      const lx=cx+Math.cos(mid)*R*0.62, ly=cy+Math.sin(mid)*R*0.62;
+      ctx.fillStyle=NCSkin.paper2||NCSkin.ink; ctx.textAlign="center";
+      ctx.font="12px "+(NCSkin.mono||"monospace");
+      const pct=(s.val/total*100).toFixed(0);
+      if(s.val/total>0.06) ctx.fillText(pct+"%", lx, ly);
+      a0=a1;
+    });
+    // outline
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI); ctx.stroke();
+
+    // legend
+    ctx.textAlign="left"; ctx.font="12px "+(NCSkin.mono||"monospace");
+    segs.forEach((s,i)=>{
+      const ly=14+i*18;
+      ctx.fillStyle=s.col; ctx.fillRect(20, ly, 12,12);
+      ctx.fillStyle=NCSkin.ink; ctx.fillText(`${s.label}: ${s.val}`, 38, ly+10);
+    });
+  }
+
+  ["in-home_price","in-down_payment","in-years","in-rate_pct","in-annual_tax","in-annual_insurance"]
+    .forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", update);
+  styleFields();
+  update();
+})();
+</script>

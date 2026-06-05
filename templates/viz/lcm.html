@@ -1,0 +1,56 @@
+{# LCM number line with a plain-English caption. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>a<input id="in-a" type="number" value="4" step="1" min="1"></label>
+    <label>b<input id="in-b" type="number" value="6" step="1" min="1"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="lcm-chart" width="520" height="150" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="lcm-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("lcm-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = { a:+$("in-a").value, b:+$("in-b").value };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+    if (data.error){ $("viz-out").innerHTML = "<b>"+data.error+"</b>"; $("lcm-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height); return; }
+    const a=$("in-a").value, b=$("in-b").value;
+    $("viz-out").innerHTML = `LCM(${a}, ${b}) = <b>${data.lcm}</b>`;
+    $("lcm-caption").innerHTML =
+      `Each row marks the times-table of one number. <b>${data.lcm}</b> is the ` +
+      `first spot where both rows have a dot at the same place — the smallest ` +
+      `number ${a} and ${b} both divide into.`;
+    draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const series=d.series||[], lcm=d.lcm||1;
+    const W=cv.width-50, scale=W/lcm, cols=[NCSkin.accent, NCSkin.yes];
+    series.forEach((row,i)=>{
+      const y=30+i*44;
+      ctx.strokeStyle=NCSkin.rule; ctx.beginPath();
+      ctx.moveTo(30,y); ctx.lineTo(30+W,y); ctx.stroke();
+      row.multiples.forEach(m=>{
+        ctx.fillStyle=cols[i%cols.length];
+        ctx.beginPath(); ctx.arc(30+m*scale, y, 5, 0, 2*Math.PI); ctx.fill();
+      });
+      ctx.fillStyle=NCSkin.ink; ctx.font="12px "+(NCSkin.mono||"monospace");
+      ctx.fillText("×"+row.n, 2, y+4);
+    });
+  }
+
+  ["in-a","in-b"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", update);
+  update();
+})();
+</script>

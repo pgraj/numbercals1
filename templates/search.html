@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Search · {{ site_name }}{% endblock %}
+{% block content %}
+<p class="eyebrow">// search</p>
+{% if query %}
+  <h1>Results for "{{ query }}"</h1>
+  <p class="lede">{{ results|length }} match{{ '' if results|length == 1 else 'es' }} found.</p>
+{% else %}
+  <h1>Search</h1>
+  <p class="lede">Search across every calculator, formula, and theorem on the site.</p>
+{% endif %}
+
+<form class="search-page-box" action="/search" method="get" role="search">
+  <input name="q" type="search" value="{{ query }}" placeholder="Try: compound interest, quadratic, projectile…" aria-label="Search" autofocus>
+  <button type="submit">Search</button>
+</form>
+
+{% for c in results %}
+  <div class="calc-row">
+    <a href="{{ c.url }}">{{ c.name }}</a>
+    <span class="formula">{{ c.section }} › {{ c.sub }}</span>
+  </div>
+{% else %}
+  {% if query %}<p class="lede">No matches for "{{ query }}". Try a broader term, or
+    <a href="/contact">request this calculator</a>.</p>{% endif %}
+{% endfor %}
+{% endblock %}

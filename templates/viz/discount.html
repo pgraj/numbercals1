@@ -1,0 +1,100 @@
+{# Discount waterfall: original -> -savings -> +tax -> final. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Original price<input id="in-original_price" type="number" value="200" step="5" min="0"></label>
+    <label>Discount %<input id="in-discount_pct" type="number" value="25" step="1" min="0" max="100"></label>
+    <label>Tax %<input id="in-tax_pct" type="number" value="10" step="0.5" min="0"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="disc-chart" width="640" height="380" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="disc-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg;
+      el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px";
+      el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("disc-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = {
+      original_price:+$("in-original_price").value,
+      discount_pct:+$("in-discount_pct").value,
+      tax_pct:+$("in-tax_pct").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("disc-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height);
+      return;
+    }
+    $("viz-out").innerHTML =
+      `Final price: <b>${data.final_price}</b> &nbsp; You save: <b>${data.savings}</b>`;
+    $("disc-caption").innerHTML =
+      `Read the steps left to right: start at the original price, drop down by the savings, ` +
+      `then climb back up by the tax to land on what you actually pay. The downward step is ` +
+      `the discount working in your favour; the small upward step is the tax added on the reduced amount.`;
+    draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const pad=50, W=cv.width-2*pad, H=cv.height-2*pad;
+    const maxV=Math.max(d.original_price, d.final_price, 1)*1.1;
+    const Y=v=>pad+H-(v/maxV)*H;
+    // waterfall steps: [label, bottom, top, colour, isTotal]
+    const steps=[
+      {label:"Original", bottom:0, top:d.original_price, col:NCSkin.inkSoft},
+      {label:"− Savings", bottom:d.discounted, top:d.original_price, col:NCSkin.accent},
+      {label:"+ Tax", bottom:d.discounted, top:d.discounted+d.tax_amount, col:NCSkin.yes},
+      {label:"Final", bottom:0, top:d.final_price, col:NCSkin.accent},
+    ];
+    const n=steps.length, slot=W/n, bw=Math.min(slot*0.55,70);
+    // baseline
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad,Y(0)); ctx.lineTo(pad+W,Y(0)); ctx.stroke();
+    steps.forEach((s,i)=>{
+      const x=pad+slot*i+(slot-bw)/2;
+      ctx.fillStyle=s.col;
+      ctx.fillRect(x, Y(s.top), bw, Y(s.bottom)-Y(s.top));
+      // connector to next step
+      if(i<n-1){
+        ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+        const yConnect = (i===0)? Y(d.original_price) : (i===1? Y(d.discounted) : Y(d.discounted+d.tax_amount));
+        ctx.beginPath(); ctx.moveTo(x+bw, yConnect); ctx.lineTo(pad+slot*(i+1)+(slot-bw)/2, yConnect); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      // labels
+      ctx.fillStyle=NCSkin.ink; ctx.textAlign="center"; ctx.font="11px "+(NCSkin.mono||"monospace");
+      ctx.fillText(s.label, x+bw/2, Y(0)+16);
+      const val = (i===1)? d.savings : (i===2? d.tax_amount : s.top);
+      ctx.fillText((i===1?"−":i===2?"+":"")+val, x+bw/2, Y(s.top)-8);
+    });
+  }
+
+  ["in-original_price","in-discount_pct","in-tax_pct"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", update);
+  styleFields();
+  update();
+})();
+</script>

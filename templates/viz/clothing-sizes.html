@@ -1,0 +1,107 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Category
+      <span class="nc-field">
+        <select id="cs-cat">
+          <option value="Women's Tops" selected>Women's Tops</option>
+          <option value="Men's Tops">Men's Tops</option>
+          <option value="Women's Shoes">Women's Shoes</option>
+          <option value="Men's Shoes">Men's Shoes</option>
+          <option value="Children's Tops">Children's Tops</option>
+        </select>
+      </span>
+    </label>
+    <label>Your region
+      <span class="nc-field">
+        <select id="cs-region">
+          <option value="US">US</option>
+          <option value="UK" selected>UK</option>
+          <option value="EU">EU</option>
+          <option value="Asian">Asian</option>
+        </select>
+      </span>
+    </label>
+    <label>Your size
+      <span class="nc-field"><input id="cs-size" type="text" value="12" autocomplete="off"></span>
+    </label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <div id="cs-table" style="margin-top:14px;overflow-x:auto"></div>
+  <p class="viz-caption" id="cs-cap" style="font-size:.9rem;margin-top:.5rem;opacity:.85"></p>
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="cs-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  let last = null;
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$("cs-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+    if(last) renderTable(last);
+  }
+  function renderTable(d){
+    if(!d || !d.table){ $("cs-table").innerHTML=""; return; }
+    const regions=d.regions, reg=d.matched_region, sz=d.matched_size;
+    let html=`<table style="border-collapse:collapse;width:100%;font-size:.9rem;color:${NCSkin.ink}">`;
+    html+=`<thead><tr>`;
+    regions.forEach(r=>{ html+=`<th style="text-align:left;padding:6px 10px;border-bottom:2px solid ${NCSkin.rule};color:${NCSkin.inkSoft}">${r}</th>`; });
+    html+=`</tr></thead><tbody>`;
+    d.table.forEach(row=>{
+      const isMatch = String(row[reg]).toLowerCase()===String(sz).toLowerCase();
+      const bg = isMatch ? NCSkin.accent : "transparent";
+      const fg = isMatch ? (NCSkin.paper||"#fff") : NCSkin.ink;
+      const wt = isMatch ? "700" : "400";
+      html+=`<tr style="background:${bg}">`;
+      regions.forEach(r=>{ html+=`<td style="padding:6px 10px;border-bottom:1px solid ${NCSkin.rule};color:${fg};font-weight:${wt}">${row[r]}</td>`; });
+      html+=`</tr>`;
+    });
+    html+=`</tbody></table>`;
+    $("cs-table").innerHTML=html;
+  }
+  async function update(){
+    const body={ category:$("cs-cat").value, region:$("cs-region").value, size:$("cs-size").value };
+    let data;
+    try { const r=await fetch("/api/compute/{{ calc.slug }}",{method:"POST",
+            headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+          data=await r.json(); }
+    catch(e){ $("viz-out").textContent="compute error"; return; }
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("cs-disc").textContent = "⚠ " + data.disclaimer;
+    if (data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; $("cs-table").innerHTML=""; last=null; return; }
+    $("viz-out").innerHTML = data.result;
+    try{ if(window.__ncExplain) window.__ncExplain(data.explanation); }catch(e){}
+    last=data; renderTable(data);
+  }
+  ["cs-cat","cs-region","cs-size"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  window.addEventListener("nc-theme-change", styleFields);
+  styleFields(); update();
+})();
+</script>
+

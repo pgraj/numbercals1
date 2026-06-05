@@ -1,0 +1,110 @@
+{# Profit margin gauge: needle sweeps low->high, colour red->green via NCSkin. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Revenue<input id="in-revenue" type="number" value="100000" step="1000" min="1"></label>
+    <label>Cost of goods sold<input id="in-cogs" type="number" value="60000" step="1000" min="0"></label>
+    <label>Operating expenses<input id="in-operating_expenses" type="number" value="20000" step="1000" min="0"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="pm-chart" width="640" height="380" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="pm-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg;
+      el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px";
+      el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("pm-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = {
+      revenue:+$("in-revenue").value,
+      cogs:+$("in-cogs").value,
+      operating_expenses:+$("in-operating_expenses").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("pm-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height);
+      return;
+    }
+    $("viz-out").innerHTML =
+      `Gross margin: <b>${data.gross_margin_pct}%</b> &nbsp; Net margin: <b>${data.net_margin_pct}%</b> ` +
+      `&nbsp; Gross profit: <b>${data.gross_profit}</b>`;
+    $("pm-caption").innerHTML =
+      `The needle shows the gross margin — the share of each sales dollar left after the direct ` +
+      `cost of goods. Further left (red) is a thin margin; further right (green) is a healthy one. ` +
+      `The net margin (${data.net_margin_pct}%) is lower because it also pays for operating expenses.`;
+    draw(data.gross_margin_pct);
+  }
+
+  // blend NCSkin.accent (low) -> NCSkin.yes (high) by margin fraction
+  function lerpColor(c1,c2,t){
+    const p=s=>{ s=s.trim();
+      if(s[0]==='#'){ const h=s.slice(1); const n=h.length===3?h.split('').map(x=>x+x).join(''):h;
+        return [parseInt(n.slice(0,2),16),parseInt(n.slice(2,4),16),parseInt(n.slice(4,6),16)]; }
+      const m=s.match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)/); return m?[+m[1],+m[2],+m[3]]:[120,120,120];
+    };
+    const a=p(c1), b=p(c2);
+    const r=Math.round(a[0]+(b[0]-a[0])*t), g=Math.round(a[1]+(b[1]-a[1])*t), bl=Math.round(a[2]+(b[2]-a[2])*t);
+    return `rgb(${r},${g},${bl})`;
+  }
+
+  function draw(marginPct){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const cx=cv.width/2, cy=cv.height*0.72, R=Math.min(cv.width,cv.height)*0.42;
+    // map 0..50% margin onto the half-circle (clamp)
+    const frac=Math.max(0,Math.min(1, marginPct/50));
+    // arc background segments low->high
+    const segs=40;
+    for(let i=0;i<segs;i++){
+      const a0=Math.PI+(i/segs)*Math.PI;
+      const a1=Math.PI+((i+1)/segs)*Math.PI;
+      ctx.strokeStyle=lerpColor(NCSkin.accent, NCSkin.yes, i/segs);
+      ctx.lineWidth=18; ctx.beginPath(); ctx.arc(cx,cy,R,a0,a1); ctx.stroke();
+    }
+    // needle
+    const ang=Math.PI+frac*Math.PI;
+    ctx.strokeStyle=NCSkin.ink; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.lineTo(cx+Math.cos(ang)*(R-10), cy+Math.sin(ang)*(R-10)); ctx.stroke();
+    ctx.fillStyle=NCSkin.ink; ctx.beginPath(); ctx.arc(cx,cy,6,0,2*Math.PI); ctx.fill();
+    // scale labels
+    ctx.fillStyle=NCSkin.inkSoft; ctx.font="11px "+(NCSkin.mono||"monospace"); ctx.textAlign="center";
+    ctx.fillText("0%", cx-R, cy+16);
+    ctx.fillText("25%", cx, cy-R-8);
+    ctx.fillText("50%+", cx+R, cy+16);
+    // big number
+    ctx.fillStyle=lerpColor(NCSkin.accent, NCSkin.yes, frac);
+    ctx.font="32px "+(NCSkin.mono||"monospace");
+    ctx.fillText(marginPct+"%", cx, cy-30);
+    ctx.fillStyle=NCSkin.inkSoft; ctx.font="12px "+(NCSkin.mono||"monospace");
+    ctx.fillText("gross margin", cx, cy-12);
+  }
+
+  ["in-revenue","in-cogs","in-operating_expenses"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", update);
+  styleFields();
+  update();
+})();
+</script>

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Contact · {{ site_name }}{% endblock %}
+{% block description %}Get in touch with {{ site_name }} — feedback, suggestions, and bug reports.{% endblock %}
+{% block content %}
+<p class="eyebrow">// contact</p>
+<h1>Contact</h1>
+<p class="lede">We'd love to hear from you. Use the email below for bug reports
+  (a calculator giving a wrong result, a page that won't load, a broken link),
+  suggestions for new calculators, corrections to formulas, or general feedback.</p>
+
+<div class="contact-card">
+  <div class="contact-label">Email</div>
+  <div class="contact-email">
+    <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>
+  </div>
+  <p class="citation">We aim to reply within a few business days. For bug reports,
+    please include the calculator name, the inputs you used, the result you got,
+    and the result you expected.</p>
+</div>
+
+<h2>What we can't help with</h2>
+<p class="lede">We can't give personalised financial, medical, legal, or tax advice.
+  The calculators here are general educational tools — for advice specific to your
+  situation, please consult a qualified professional.</p>
+{% endblock %}

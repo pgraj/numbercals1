@@ -1,0 +1,104 @@
+{# Interest rate sensitivity: implied-rate growth line with +/-2% bands fanning out. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Principal<input id="in-principal" type="number" value="1000" step="100" min="1"></label>
+    <label>Maturity amount<input id="in-maturity_amount" type="number" value="1500" step="100" min="1"></label>
+    <label>Years<input id="in-years" type="number" value="5" step="1" min="1"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="ir-chart" width="640" height="380" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="ir-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg;
+      el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px";
+      el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("ir-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = {
+      principal:+$("in-principal").value,
+      maturity_amount:+$("in-maturity_amount").value,
+      years:+$("in-years").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    if (window.NCSteps) window.NCSteps.render(data.steps || []);
+
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("ir-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height);
+      return;
+    }
+    $("viz-out").innerHTML =
+      `Implied rate: <b>${data.rate_pct}%</b> per year &nbsp;(effective ${data.effective_pct}%)`;
+    $("ir-caption").innerHTML =
+      `The middle line grows at the implied ${data.rate_pct}%. The lines two points either side ` +
+      `show how the maturity value would shift at a slightly different rate. The fan between them ` +
+      `widens with time — proof that a small rate change compounds into a big difference over the years.`;
+    draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const pad=56, W=cv.width-2*pad, H=cv.height-2*pad;
+    const bands=d.bands; if(!bands||!bands.length) return;
+    let yMax=0, xMax=0;
+    bands.forEach(b=>b.points.forEach(p=>{ yMax=Math.max(yMax,p.value); xMax=Math.max(xMax,p.year); }));
+    yMax*=1.05; xMax=xMax||1;
+    const X=x=>pad+(x/xMax)*W;
+    const Y=y=>pad+H-(y/yMax)*H;
+
+    // axes
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad,Y(0)); ctx.lineTo(pad+W,Y(0)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad,pad); ctx.lineTo(pad,pad+H); ctx.stroke();
+
+    const styles=[
+      {col:NCSkin.inkSoft, w:1.5, dash:[4,4]},   // -2%
+      {col:NCSkin.accent,  w:2.8, dash:[]},      // implied
+      {col:NCSkin.yes,     w:1.5, dash:[4,4]},   // +2%
+    ];
+    bands.forEach((b,bi)=>{
+      const s=styles[bi]||styles[1];
+      ctx.strokeStyle=s.col; ctx.lineWidth=s.w; ctx.setLineDash(s.dash);
+      ctx.beginPath();
+      b.points.forEach((p,i)=> i?ctx.lineTo(X(p.year),Y(p.value)):ctx.moveTo(X(p.year),Y(p.value)));
+      ctx.stroke(); ctx.setLineDash([]);
+      // end label
+      const last=b.points[b.points.length-1];
+      ctx.fillStyle=s.col; ctx.textAlign="left"; ctx.font="11px "+(NCSkin.mono||"monospace");
+      ctx.fillText(b.label+" ("+b.rate_pct+"%)", X(last.year)-58, Y(last.value)-6);
+    });
+    // x labels
+    ctx.fillStyle=NCSkin.inkSoft; ctx.textAlign="center"; ctx.font="11px "+(NCSkin.mono||"monospace");
+    const mid=bands[1].points;
+    mid.forEach(p=> ctx.fillText("yr "+p.year, X(p.year), Y(0)+16));
+  }
+
+  ["in-principal","in-maturity_amount","in-years"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", update);
+  styleFields();
+  update();
+})();
+</script>

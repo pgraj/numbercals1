@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Minds behind Maths · {{ site_name }}{% endblock %}
+{% block content %}
+<p class="eyebrow">// minds behind maths</p>
+<h1>Minds behind Maths</h1>
+<p class="lede">The scholars whose laws and formulas inspire these tools.
+  Click a letter to filter; each profile cites its source.</p>
+
+{% if letters %}
+<nav class="az-index" id="az-index">
+  <a href="#" class="az-chip active" data-letter="ALL">All</a>
+  {% for letter in letters.keys() %}
+  <a href="#" class="az-chip" data-letter="{{ letter }}">{{ letter }}</a>
+  {% endfor %}
+</nav>
+
+{% for letter, people in letters.items() %}
+<section class="az-group" id="sec-{{ letter }}" data-letter="{{ letter }}">
+  <h2 class="az-letter">{{ letter }}</h2>
+  {% for sch in people %}
+  <a class="az-row" href="{{ sch.url }}">
+    <span class="az-name">{{ sch.name }}</span>
+    <span class="az-meta">{{ sch.era }}{% if sch.field_of %} · {{ sch.field_of }}{% endif %}</span>
+  </a>
+  {% endfor %}
+</section>
+{% endfor %}
+
+<script>
+(function(){
+  const chips = document.querySelectorAll('.az-chip');
+  const groups = document.querySelectorAll('.az-group');
+  chips.forEach(chip => chip.addEventListener('click', function(e){
+    e.preventDefault();
+    const want = this.dataset.letter;
+    chips.forEach(c => c.classList.remove('active'));
+    this.classList.add('active');
+    groups.forEach(g => {
+      g.style.display = (want === 'ALL' || g.dataset.letter === want) ? '' : 'none';
+    });
+  }));
+})();
+</script>
+{% else %}
+<p class="lede">No scholars added yet.</p>
+{% endif %}
+{% endblock %}

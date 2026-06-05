@@ -1,0 +1,136 @@
+<link rel="stylesheet" href="/static/nclearn.css">
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Opposite (O)
+      <span class="nc-field"><input id="ir-opp" type="number" value="3" step="any"></span></label>
+    <label>Adjacent (A)
+      <span class="nc-field"><input id="ir-adj" type="number" value="4" step="any"></span></label>
+    <label>Hypotenuse (H) <span style="opacity:.7">— optional</span>
+      <span class="nc-field"><input id="ir-hyp" type="number" value="5" step="any"></span></label>
+  </div>
+
+  <div class="viz-out" id="ir-out"></div>
+
+  <canvas id="ir-diagram" width="640" height="320"
+          style="display:block;width:100%;height:auto;max-width:520px;margin:10px auto 0"></canvas>
+  <p class="viz-caption" id="ir-cap" style="font-size:.85rem;text-align:center;margin-top:.4rem;opacity:.85"></p>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="ir-disc" style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const slug = "{{ calc.slug }}";
+  const P = "ir";
+  const panel = document.querySelector('.viz-panel[data-slug="'+slug+'"]');
+  let last = null;
+
+  function styleFields(){
+    if(!window.NCSkin || !panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      if(el.type==="range") return;
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  function buildBody(){
+    return { opp:$("ir-opp").value, adj:$("ir-adj").value, hyp:$("ir-hyp").value };
+  }
+
+  async function update(){
+    
+    const body = buildBody();
+    let data;
+    try { const r=await fetch("/api/compute/"+slug,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $(P+"-out").textContent="compute error"; return; }
+    try { if(window.NCSteps) window.NCSteps.render(data.steps||[]); } catch(e){}
+    if (data.disclaimer) $(P+"-disc").textContent="\u26a0 "+data.disclaimer;
+    if (data.error){ $(P+"-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} drawDiagram(null); last=null; mountLearn(null); return; }
+    $(P+"-out").innerHTML = '<b>sin '+fmt(data.sin)+' \u00b7 cos '+fmt(data.cos)+' \u00b7 tan '+fmt(data.tan)+'</b>  (\u03b8 \u2248 '+fmt(data.angle)+'\u00b0)';
+    try{ window.__ncExplain(data.explanation);}catch(e){}
+    last=data; drawDiagram(data); mountLearn(data);
+  }
+
+  function mountLearn(data){
+    if(!window.NCLearn) return;
+    NCLearn.mount({ slug:slug, panel:panel, data:data, drawFrame:(data?drawFrame:undefined) });
+  }
+
+  function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
+
+
+  function drawDiagram(d){
+    const cv=$(P+"-diagram"); if(!cv) return; const ctx=cv.getContext("2d"); const s=window.NCSkin||{};
+    const ink=s.ink||"#222", accent=s.accent||"#b50", yes=s.yes||"#3a7", soft=s.inkSoft||"#777", rule=s.rule||"#ccc";
+    const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H); const cap=$(P+"-cap");
+    if(!d){ if(cap) cap.textContent=""; return; }
+    drawTri(ctx,d,s,ink,accent,yes,soft,rule,null);
+    if(cap) cap.textContent="Opposite is across from \u03b8, adjacent is beside it, hypotenuse faces the right angle.";
+  }
+  function drawTri(ctx,d,s,ink,accent,yes,soft,rule,highlight){
+    const u=Math.min(360/Math.max(d.adj,1), 200/Math.max(d.opp,1), 40);
+    const Bx=120, By=250;                 // right angle
+    const Cx=Bx+d.adj*u, Cy=By;           // adjacent along base
+    const Ax=Bx, Ay=By-d.opp*u;           // opposite up
+    // sides; optionally highlight a pair
+    function seg(x1,y1,x2,y2,col,w){ ctx.strokeStyle=col; ctx.lineWidth=w||2; ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
+    const hi = c => (highlight && highlight.indexOf(c)>=0);
+    seg(Ax,Ay,Bx,By, hi("O")?yes:ink, hi("O")?4:2);   // opposite
+    seg(Bx,By,Cx,Cy, hi("A")?yes:ink, hi("A")?4:2);   // adjacent
+    seg(Ax,Ay,Cx,Cy, hi("H")?yes:accent, hi("H")?4:2);// hypotenuse
+    // right-angle mark + theta arc at C
+    ctx.strokeStyle=soft; ctx.lineWidth=1; ctx.strokeRect(Bx,By-12,12,12);
+    ctx.strokeStyle=accent; ctx.beginPath(); ctx.arc(Cx,Cy,26,Math.PI, Math.PI-Math.atan2(d.opp*u,d.adj*u),true); ctx.stroke();
+    // labels
+    ctx.fillStyle=ink; ctx.font="13px "+(s.sans||"sans-serif"); ctx.textAlign="center";
+    ctx.save(); ctx.translate(Bx-14,(Ay+By)/2); ctx.rotate(-Math.PI/2); ctx.fillText("O = "+fmt(d.opp),0,0); ctx.restore();
+    ctx.fillText("A = "+fmt(d.adj), (Bx+Cx)/2, By+18);
+    ctx.fillStyle=accent;
+    ctx.save(); const mx=(Ax+Cx)/2,my=(Ay+Cy)/2,ang=Math.atan2(Cy-Ay,Cx-Ax); ctx.translate(mx,my); ctx.rotate(ang); ctx.fillText("H = "+fmt(d.hyp),0,-8); ctx.restore();
+    ctx.fillStyle=accent; ctx.font="bold 13px "+(s.sans||"sans-serif"); ctx.fillText("\u03b8", Cx-30, Cy-6);
+  }
+
+
+  function drawFrame(ctx,t,d){ if(!d) return; const s=window.NCSkin||{};
+    const ink=s.ink||"#222", accent=s.accent||"#b50", yes=s.yes||"#3a7", soft=s.inkSoft||"#777", rule=s.rule||"#ccc";
+    ctx.clearRect(0,0,640,320);
+    // cycle which ratio's two sides are highlighted: sin(O,H) cos(A,H) tan(O,A)
+    const phase = Math.floor(t*3)%3;
+    const hi = phase===0? ["O","H"] : phase===1? ["A","H"] : ["O","A"];
+    const lab = phase===0? "sin = O/H" : phase===1? "cos = A/H" : "tan = O/A";
+    drawTri(ctx,d,s,ink,accent,yes,soft,rule,hi);
+    ctx.fillStyle=yes; ctx.font="bold 15px "+(s.mono||"monospace"); ctx.textAlign="left";
+    ctx.fillText(lab, 24, 30);
+  }
+
+  ["ir-opp","ir-adj","ir-hyp"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });
+  styleFields();  update();
+})();
+</script>

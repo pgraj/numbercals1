@@ -1,0 +1,135 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Density ρ (kg/m³)
+      <span class="nc-field"><input id="dn-rho" type="number" value="1.225" step="any"></span>
+    </label>
+    <label>Velocity v (m/s)
+      <span class="nc-field"><input id="dn-v" type="number" value="50" step="any"></span>
+    </label>
+    <label>Chord length L (m)
+      <span class="nc-field"><input id="dn-L" type="number" value="2" step="any"></span>
+    </label>
+    <label>Dynamic viscosity μ (Pa·s)
+      <span class="nc-field"><input id="dn-mu" type="number" value="1.81e-05" step="any"></span>
+    </label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="dn-chart" width="640" height="300"
+          style="margin-top:14px;width:100%;height:auto;max-width:640px"></canvas>
+  <p class="viz-caption" id="dn-cap" style="font-size:.9rem;margin-top:.5rem;opacity:.85"></p>
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="dn-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("dn-chart"), ctx = cv.getContext("2d");
+  const IDS = ["rho", "v", "L", "mu"];
+  let last = null;
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$("dn-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+  function regimeColour(i,n){ const h = 140 - i*(132/Math.max(1,n-1)); return `hsl(${h} 60% 52%)`; }
+  async function update(){
+    const body = {};
+    IDS.forEach(p => body[p] = +$("dn-"+p).value);
+    let data;
+    try { const r=await fetch("/api/compute/{{ calc.slug }}",{method:"POST",
+            headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+          data=await r.json(); }
+    catch(e){ $("viz-out").textContent="compute error"; return; }
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("dn-disc").textContent = "⚠ " + data.disclaimer;
+    if (data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; ctx.clearRect(0,0,cv.width,cv.height); last=null; return; }
+    const r=data.result;
+    const shown=(Math.abs(r)>=1e6||Math.abs(r)<1e-4)? r.toExponential(4):(Math.round(r*1e4)/1e4);
+    $("viz-out").innerHTML = `${data.symbol} = <b>${shown}</b> · <span style="color:${NCSkin.accent}">${data.regime}</span>`;
+    try{ if(window.__ncExplain) window.__ncExplain(data.explanation); }catch(e){}
+    last=data; draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const W=cv.width,H=cv.height,padL=20,padR=20,padT=34,padB=46;
+    const regs=d.regimes||[]; const n=regs.length;
+    // LOG scale: Reynolds spans many orders of magnitude, so a log axis makes
+    // the laminar (<2300), transition (2300–4000) and turbulent (>4000) bands
+    // all visible at once instead of squashing the small ones to nothing.
+    const LOGLO=Math.log10(1), LOGHI=Math.log10(1e7);   // Re 1 .. 10,000,000
+    const x = v => { const lv=Math.log10(Math.max(1,Math.min(1e7,v)));
+      return padL + (lv-LOGLO)/(LOGHI-LOGLO)*(W-padL-padR); };
+    // strong, distinct band fills (green→amber→red = calm→transition→chaotic)
+    const bandHue=[145,42,8];
+    regs.forEach((r,i)=>{
+      const a = r.lo==null? 1 : r.lo;
+      const b = r.hi==null? 1e7 : r.hi;
+      ctx.fillStyle=`hsl(${bandHue[i]!==undefined?bandHue[i]:220} 58% 55%)`;
+      ctx.globalAlpha=0.55;
+      ctx.fillRect(x(a),padT,Math.max(2,x(b)-x(a)),H-padT-padB);
+      ctx.globalAlpha=1;
+      const cx=(x(a)+x(Math.min(b,1e7)))/2;
+      ctx.fillStyle=NCSkin.ink; ctx.font="12px "+(NCSkin.sans||"sans-serif"); ctx.textAlign="center";
+      ctx.fillText(r.label, cx, H-padB+18);
+    });
+    // threshold gridlines + numeric labels at 2300 and 4000 (staggered heights
+    // because they sit close together on the log axis)
+    [[2300,-6],[4000,-18]].forEach(([t,dy])=>{
+      const tx=x(t);
+      ctx.strokeStyle=NCSkin.ink; ctx.globalAlpha=.45; ctx.setLineDash([4,3]);
+      ctx.beginPath(); ctx.moveTo(tx,padT); ctx.lineTo(tx,H-padB); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha=1;
+      ctx.fillStyle=NCSkin.inkSoft; ctx.font="10px "+(NCSkin.mono||"monospace"); ctx.textAlign="center";
+      ctx.fillText(t.toLocaleString(), tx, padT+dy);
+    });
+    ctx.strokeStyle=NCSkin.rule; ctx.beginPath();
+    ctx.moveTo(padL,H-padB); ctx.lineTo(W-padR,H-padB); ctx.stroke();
+    // marker at current Re
+    const xx=x(d.value), midY=(padT+(H-padB))/2;
+    ctx.strokeStyle=NCSkin.accent; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(xx,padT); ctx.lineTo(xx,H-padB); ctx.stroke();
+    ctx.beginPath(); ctx.arc(xx,midY,7,0,2*Math.PI); ctx.fillStyle=NCSkin.accent; ctx.fill();
+    ctx.lineWidth=1;
+    const shown=(d.value>=1e5)? d.value.toExponential(2): Math.round(d.value).toLocaleString();
+    ctx.font="12px "+(NCSkin.mono||"monospace"); ctx.textAlign="center";
+    const tw=ctx.measureText("Re "+shown).width+12;
+    let bx=Math.max(padL+tw/2, Math.min(W-padR-tw/2, xx));
+    ctx.fillStyle=NCSkin.accent; ctx.fillRect(bx-tw/2,midY-28,tw,19);
+    ctx.fillStyle=NCSkin.paper||"#fff"; ctx.fillText("Re "+shown, bx, midY-14);
+    ctx.fillStyle=NCSkin.inkSoft; ctx.textAlign="left"; ctx.font="11px "+(NCSkin.sans||"sans-serif");
+    ctx.fillText("Re on a logarithmic scale (1 → 10⁷)", padL, 12);
+  }
+
+  IDS.forEach(p=>{ const el=$("dn-"+p); el.addEventListener("input",update); el.addEventListener("change",update); });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last); });
+  styleFields(); update();
+})();
+</script>
+

@@ -1,0 +1,76 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Analyte
+      <span class="nc-field">
+        <select id="cl-analyte">
+          <option value="Glucose" selected>Glucose</option>
+          <option value="Cholesterol">Cholesterol (total)</option>
+          <option value="LDL">LDL</option>
+          <option value="HDL">HDL</option>
+          <option value="Creatinine">Creatinine</option>
+          <option value="Urea/BUN">Urea / BUN</option>
+          <option value="HbA1c">HbA1c</option>
+        </select>
+      </span>
+    </label>
+    <label>Value
+      <span class="nc-field">
+        <input id="cl-val" type="number" value="100" step="any">
+        <select id="cl-from">
+          <option value="mg/dL" selected>mg/dL</option>
+          <option value="mmol/L">mmol/L</option>
+        </select>
+      </span>
+    </label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="cl-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  let explained=false;
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{ el.style.background=bg; el.style.color=NCSkin.ink; el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$("cl-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+    styleExplain();
+  }
+  function styleExplain(){
+    const box=$("nc-explain-box"); if(!box) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  function renderExplain(items){
+    const box=$("nc-explain-box"); if(!box||!items||!items.length){ if(box)box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    styleExplain();
+  }
+  function hba1cUnits(){
+    const a=$("cl-analyte").value, sel=$("cl-from");
+    if(a==="HbA1c"){ if(sel.dataset.mode!=="hba1c"){ sel.innerHTML='<option value="%">%</option><option value="mmol/mol">mmol/mol</option>'; sel.dataset.mode="hba1c"; } }
+    else if(sel.dataset.mode!=="std"){ sel.innerHTML='<option value="mg/dL">mg/dL</option><option value="mmol/L">mmol/L</option>'; sel.dataset.mode="std"; }
+  }
+  async function update(){
+    hba1cUnits(); styleFields();
+    const body={ value:+$("cl-val").value, analyte:$("cl-analyte").value, from_unit:$("cl-from").value };
+    let data;
+    try { const r=await fetch("/api/compute/{{ calc.slug }}",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $("viz-out").textContent="compute error"; return; }
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("cl-disc").textContent = "⚠ " + data.disclaimer;
+    if(!explained && data.explanation){ renderExplain(data.explanation); explained=true; }
+    if (data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; return; }
+    $("viz-out").innerHTML = `<b>${(Math.round(data.result*1e4)/1e4)}</b> ${data.result_unit}`;
+  }
+  ["cl-val","cl-from","cl-analyte"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  window.addEventListener("nc-theme-change", styleFields);
+  styleFields(); update();
+})();
+</script>

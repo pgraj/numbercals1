@@ -1,0 +1,95 @@
+{# Future value: grouped bars PV vs FV, growth gap highlighted. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Present value<input id="in-present_value" type="number" value="5000" step="500" min="0"></label>
+    <label>Rate %<input id="in-rate_pct" type="number" value="6" step="0.25" min="0"></label>
+    <label>Periods<input id="in-periods" type="number" value="10" step="1" min="0"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="fv-chart" width="640" height="380" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="fv-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg;
+      el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px";
+      el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("fv-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = {
+      present_value:+$("in-present_value").value,
+      rate_pct:+$("in-rate_pct").value,
+      periods:+$("in-periods").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("fv-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height);
+      return;
+    }
+    $("viz-out").innerHTML =
+      `Future value: <b>${data.future_value}</b> &nbsp; Growth: <b>${data.growth}</b>`;
+    $("fv-caption").innerHTML =
+      `The left bar is your money today; the right bar is what it becomes after the periods of ` +
+      `compounding. The dashed line marks today's value across to the future bar, so the part of ` +
+      `the right bar above the line is pure growth — the longer the term or higher the rate, the bigger that gap.`;
+    draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const pad=52, W=cv.width-2*pad, H=cv.height-2*pad;
+    const maxV=Math.max(d.present_value, d.future_value,1)*1.1;
+    const Y=v=>pad+H-(v/maxV)*H;
+    const bars=[
+      {label:"Present value", val:d.present_value, col:NCSkin.inkSoft, x:pad+W*0.18},
+      {label:"Future value",  val:d.future_value,  col:NCSkin.accent,  x:pad+W*0.55},
+    ];
+    const bw=W*0.22;
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad,Y(0)); ctx.lineTo(pad+W,Y(0)); ctx.stroke();
+    bars.forEach(b=>{
+      ctx.fillStyle=b.col; ctx.fillRect(b.x,Y(b.val),bw,Y(0)-Y(b.val));
+      ctx.fillStyle=NCSkin.ink; ctx.textAlign="center"; ctx.font="12px "+(NCSkin.mono||"monospace");
+      ctx.fillText(b.label, b.x+bw/2, Y(0)+18);
+      ctx.fillText(b.val.toLocaleString(), b.x+bw/2, Y(b.val)-8);
+    });
+    // growth band on future bar
+    ctx.fillStyle=NCSkin.yes; ctx.globalAlpha=0.35;
+    ctx.fillRect(bars[1].x, Y(d.future_value), bw, Y(d.present_value)-Y(d.future_value));
+    ctx.globalAlpha=1;
+    // dashed reference line at PV level
+    ctx.strokeStyle=NCSkin.yes; ctx.lineWidth=1.5; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(bars[0].x, Y(d.present_value)); ctx.lineTo(bars[1].x+bw, Y(d.present_value));
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle=NCSkin.ink; ctx.textAlign="left"; ctx.font="11px "+(NCSkin.mono||"monospace");
+    ctx.fillText("growth", bars[1].x+bw+6, (Y(d.future_value)+Y(d.present_value))/2);
+  }
+
+  ["in-present_value","in-rate_pct","in-periods"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", update);
+  styleFields();
+  update();
+})();
+</script>

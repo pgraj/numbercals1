@@ -1,0 +1,119 @@
+<link rel="stylesheet" href="/static/nclearn.css">
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Side a
+      <span class="nc-field"><input id="hr-a" type="number" value="3" step="any"></span></label>
+    <label>Side b
+      <span class="nc-field"><input id="hr-b" type="number" value="4" step="any"></span></label>
+    <label>Side c
+      <span class="nc-field"><input id="hr-c" type="number" value="5" step="any"></span></label>
+  </div>
+
+  <div class="viz-out" id="hr-out"></div>
+
+  <canvas id="hr-diagram" width="640" height="320"
+          style="display:block;width:100%;height:auto;max-width:520px;margin:10px auto 0"></canvas>
+  <p class="viz-caption" id="hr-cap" style="font-size:.85rem;text-align:center;margin-top:.4rem;opacity:.85"></p>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="hr-disc" style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const slug = "{{ calc.slug }}";
+  const P = "hr";
+  const panel = document.querySelector('.viz-panel[data-slug="'+slug+'"]');
+  let last = null;
+
+  function styleFields(){
+    if(!window.NCSkin || !panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      if(el.type==="range") return;
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  function buildBody(){
+    return { a:$("hr-a").value, b:$("hr-b").value, c:$("hr-c").value };
+  }
+
+  async function update(){
+    
+    const body = buildBody();
+    let data;
+    try { const r=await fetch("/api/compute/"+slug,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $(P+"-out").textContent="compute error"; return; }
+    try { if(window.NCSteps) window.NCSteps.render(data.steps||[]); } catch(e){}
+    if (data.disclaimer) $(P+"-disc").textContent="\u26a0 "+data.disclaimer;
+    if (data.error){ $(P+"-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} drawDiagram(null); last=null; mountLearn(null); return; }
+    $(P+"-out").innerHTML = '<b>Area = '+data.result+'</b>  \u00b7  s = '+fmt(data.s);
+    try{ window.__ncExplain(data.explanation);}catch(e){}
+    last=data; drawDiagram(data); mountLearn(data);
+  }
+
+  function mountLearn(data){
+    if(!window.NCLearn) return;
+    NCLearn.mount({ slug:slug, panel:panel, data:data, drawFrame:(data?drawFrame:undefined) });
+  }
+
+  function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
+
+
+  function drawDiagram(d){ drawHeron(d,1); }
+  function drawHeron(d, fillAmt){
+    const cv=$(P+"-diagram"); if(!cv) return; const ctx=cv.getContext("2d"); const s=window.NCSkin||{};
+    const ink=s.ink||"#222", accent=s.accent||"#b50", yes=s.yes||"#3a7", soft=s.inkSoft||"#777", rule=s.rule||"#ccc";
+    const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H); const cap=$(P+"-cap");
+    if(!d){ if(cap) cap.textContent=""; return; }
+    const a=d.a,b=d.b,c=d.c;
+    // place side c along base; find apex by trilateration
+    const sc=Math.min(300/Math.max(a,b,c,1), 30);
+    const bx0=180, by=250, bx1=bx0+c*sc;
+    // apex distance b from bx0, a from bx1
+    const cc=c, x=(b*b - a*a + cc*cc)/(2*cc); // along base from bx0 (in real units)
+    const hsq=b*b - x*x; const h=hsq>0?Math.sqrt(hsq):0;
+    const apexX=bx0 + x*sc, apexY=by - h*sc;
+    ctx.globalAlpha=0.16*fillAmt; ctx.fillStyle=yes; ctx.beginPath(); ctx.moveTo(bx0,by); ctx.lineTo(bx1,by); ctx.lineTo(apexX,apexY); ctx.closePath(); ctx.fill(); ctx.globalAlpha=1;
+    ctx.strokeStyle=ink; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(bx0,by); ctx.lineTo(bx1,by); ctx.lineTo(apexX,apexY); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle=ink; ctx.font="13px "+(s.sans||"sans-serif"); ctx.textAlign="center";
+    ctx.fillText("c="+fmt(c), (bx0+bx1)/2, by+18);
+    ctx.fillText("b="+fmt(b), (bx0+apexX)/2-14, (by+apexY)/2);
+    ctx.fillText("a="+fmt(a), (bx1+apexX)/2+14, (by+apexY)/2);
+    ctx.fillStyle=yes; ctx.font="bold 14px "+(s.mono||"monospace"); ctx.textAlign="left"; ctx.fillText("s = "+fmt(d.s)+"   Area = "+fmt(d.area), 24, 28);
+    if(cap) cap.textContent="Area from the three sides alone; s is the semi-perimeter (half the total perimeter).";
+  }
+
+
+  function drawFrame(ctx,t,d){ if(!d) return; drawHeron(d, 0.3+0.7*(t<0.5? t/0.5 : 1-(t-0.5)/0.5)); }
+
+  ["hr-a","hr-b","hr-c"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });
+  styleFields();  update();
+})();
+</script>

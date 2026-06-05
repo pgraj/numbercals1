@@ -1,0 +1,93 @@
+{# SIP: stacked columns per year, invested (base) + returns (top). #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Monthly investment<input id="in-monthly_investment" type="number" value="500" step="50" min="0"></label>
+    <label>Return rate %<input id="in-rate_pct" type="number" value="10" step="0.25" min="0"></label>
+    <label>Years<input id="in-years" type="number" value="20" step="1" min="1"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="sip-chart" width="640" height="380" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="sip-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg;
+      el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px";
+      el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("sip-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = {
+      monthly_investment:+$("in-monthly_investment").value,
+      rate_pct:+$("in-rate_pct").value,
+      years:+$("in-years").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    if (window.NCSteps) window.NCSteps.render(data.steps || []);
+
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("sip-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height);
+      return;
+    }
+    $("viz-out").innerHTML =
+      `Total wealth: <b>${data.future_value}</b> &nbsp;(invested ${data.invested}, returns ${data.returns})`;
+    $("sip-caption").innerHTML =
+      `Each column is one year. The lower band is the cash you have put in by then; the upper ` +
+      `band is the growth compounding has added. Notice the upper band claiming more of each ` +
+      `column over time — that is your earlier instalments compounding the longest.`;
+    draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const pad=54, W=cv.width-2*pad, H=cv.height-2*pad;
+    const pts=d.series; if(!pts||!pts.length) return;
+    const maxV=Math.max(...pts.map(p=>p.total),1)*1.05;
+    const n=pts.length, slot=W/n, bw=Math.min(slot*0.62,42);
+    const Y=v=>pad+H-(v/maxV)*H;
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad,Y(0)); ctx.lineTo(pad+W,Y(0)); ctx.stroke();
+    pts.forEach((p,i)=>{
+      const x=pad+slot*i+(slot-bw)/2;
+      // invested base
+      ctx.fillStyle=NCSkin.inkSoft; ctx.fillRect(x,Y(p.invested),bw,Y(0)-Y(p.invested));
+      // returns on top
+      ctx.fillStyle=NCSkin.accent; ctx.fillRect(x,Y(p.total),bw,Y(p.invested)-Y(p.total));
+      ctx.fillStyle=NCSkin.inkSoft; ctx.textAlign="center"; ctx.font="10px "+(NCSkin.mono||"monospace");
+      if(i%Math.ceil(n/12||1)===0||i===n-1) ctx.fillText(p.year, x+bw/2, Y(0)+14);
+    });
+    // legend
+    ctx.textAlign="left"; ctx.font="12px "+(NCSkin.mono||"monospace");
+    ctx.fillStyle=NCSkin.inkSoft; ctx.fillRect(pad,12,12,12);
+    ctx.fillStyle=NCSkin.ink; ctx.fillText("Invested", pad+18,22);
+    ctx.fillStyle=NCSkin.accent; ctx.fillRect(pad+100,12,12,12);
+    ctx.fillStyle=NCSkin.ink; ctx.fillText("Returns", pad+118,22);
+  }
+
+  ["in-monthly_investment","in-rate_pct","in-years"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", update);
+  styleFields();
+  update();
+})();
+</script>

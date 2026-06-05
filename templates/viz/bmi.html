@@ -1,0 +1,134 @@
+{# BMI gauge: four coloured bands with a needle at the score.
+   Teaching point: see which band you land in and how near the next boundary. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Weight
+      <span class="nc-field">
+        <input id="in-weight" type="number" value="70" step="0.5" min="0">
+        <select id="u-weight">
+          <option value="kg">kg</option>
+          <option value="lb">lb</option>
+        </select>
+      </span>
+    </label>
+    <label>Height
+      <span class="nc-field">
+        <input id="in-height" type="number" value="175" step="0.5" min="0">
+        <select id="u-height">
+          <option value="cm">cm</option>
+          <option value="m">m</option>
+          <option value="in">in</option>
+          <option value="ft">ft + in</option>
+        </select>
+        <input id="in-height2" type="number" value="0" step="0.5" min="0"
+               style="display:none;width:5.5em" title="inches" placeholder="in">
+      </span>
+    </label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="bmi-chart" width="640" height="220" style="margin-top:14px;width:100%;height:auto;max-width:640px"></canvas>
+  <p class="viz-caption" id="bmi-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+  <p class="viz-disclaimer" id="bmi-disc" style="font-size:.82rem;line-height:1.5;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  function tone(name){
+    switch(name){
+      case "low":  return "hsl(205 55% 55%)";
+      case "ok":   return NCSkin.yes;
+      case "warn": return "hsl(38 75% 52%)";
+      case "high": return NCSkin.accent;
+      default:     return NCSkin.inkSoft;
+    }
+  }
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg; el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px"; el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+    const disc = document.getElementById("bmi-disc");
+    if(disc){ disc.style.background = NCSkin.paper2; disc.style.color = NCSkin.inkSoft;
+              disc.style.border = "1px solid " + NCSkin.rule; }
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("bmi-chart"), ctx = cv.getContext("2d");
+  let last = null;
+
+  function syncHeightUnit(){
+    $("in-height2").style.display = ($("u-height").value === "ft") ? "" : "none";
+  }
+
+  async function update(){
+    syncHeightUnit();
+    const body = {
+      weight_kg:+$("in-weight").value, weight_unit:$("u-weight").value,
+      height_cm:+$("in-height").value, height_unit:$("u-height").value,
+      height_in2:+$("in-height2").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("bmi-disc").textContent = "⚠ " + data.disclaimer;
+
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("bmi-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height);
+      last = null; return;
+    }
+    $("viz-out").innerHTML = `BMI: <b>${data.bmi}</b> &nbsp; Status: <b>${data.status}</b>`;
+    $("bmi-caption").innerHTML =
+      `The bar runs from low to high BMI, split into the four standard bands. The needle ` +
+      `marks your score of <b>${data.bmi}</b>, so you can see which band you land in and ` +
+      `how close you are to the next boundary.`;
+    last = data; draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const padX=40, barY=70, barH=46, W=cv.width-2*padX;
+    const lo=d.scale_min, hi=d.scale_max, span=hi-lo;
+    const X = v => padX + (Math.max(lo,Math.min(hi,v))-lo)/span*W;
+
+    d.bands.forEach(b=>{
+      ctx.fillStyle = tone(b.tone);
+      ctx.fillRect(X(b.from), barY, X(b.to)-X(b.from), barH);
+      ctx.fillStyle = NCSkin.ink;
+      ctx.font = "11px "+(NCSkin.mono||"monospace"); ctx.textAlign = "center";
+      ctx.fillText(b.from, X(b.from), barY+barH+16);
+      ctx.fillStyle = "#fff"; ctx.font = "11px "+(NCSkin.mono||"monospace");
+      ctx.fillText(b.label, (X(b.from)+X(b.to))/2, barY+barH/2+4);
+    });
+    ctx.fillStyle = NCSkin.ink; ctx.textAlign="center";
+    ctx.font = "11px "+(NCSkin.mono||"monospace");
+    ctx.fillText(d.scale_max, X(d.scale_max), barY+barH+16);
+
+    const nx = X(d.bmi);
+    ctx.strokeStyle = NCSkin.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(nx, barY-14); ctx.lineTo(nx, barY+barH+4); ctx.stroke();
+    ctx.fillStyle = NCSkin.ink; ctx.beginPath();
+    ctx.moveTo(nx, barY-2); ctx.lineTo(nx-6, barY-14); ctx.lineTo(nx+6, barY-14);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = NCSkin.accent; ctx.font = "bold 14px "+(NCSkin.mono||"monospace");
+    ctx.textAlign = "center"; ctx.fillText(d.bmi, nx, barY-20);
+  }
+
+  ["in-weight","u-weight","in-height","u-height","in-height2"].forEach(id=>{
+    const el=$(id); el.addEventListener("input", update); el.addEventListener("change", update);
+  });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last); });
+  styleFields(); syncHeightUnit();
+  update();
+})();
+</script>

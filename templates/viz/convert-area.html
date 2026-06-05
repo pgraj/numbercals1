@@ -1,0 +1,122 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Value
+      <span class="nc-field">
+        <input id="cv-val" type="number" value="2" step="any">
+        <select id="cv-from"><option value="mm\u00b2">mm²</option><option value="cm\u00b2">cm²</option><option value="m\u00b2">m²</option><option value="km\u00b2">km²</option><option value="in\u00b2">in²</option><option value="ft\u00b2">ft²</option><option value="acre" selected>acre</option><option value="hectare">hectare</option></select>
+      </span>
+    </label>
+    <label>Convert to
+      <span class="nc-field">
+        <select id="cv-to"><option value="mm\u00b2">mm²</option><option value="cm\u00b2">cm²</option><option value="m\u00b2" selected>m²</option><option value="km\u00b2">km²</option><option value="in\u00b2">in²</option><option value="ft\u00b2">ft²</option><option value="acre">acre</option><option value="hectare">hectare</option></select>
+      </span>
+    </label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="cv-chart" width="640" height="220"
+          style="margin-top:14px;width:100%;height:auto;max-width:640px"></canvas>
+  <p class="viz-caption" id="cv-cap" style="font-size:.9rem;margin-top:.5rem;opacity:.85"></p>
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="cv-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("cv-chart"), ctx = cv.getContext("2d");
+  let last = null;
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$("cv-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+  function fmt(x){
+    if(x===0) return "0";
+    const a=Math.abs(x);
+    if(a>=1e6||a<1e-4) return x.toExponential(4);
+    return (Math.round(x*1e6)/1e6).toString();
+  }
+  async function update(){
+    const body = { value:+$("cv-val").value, from_unit:$("cv-from").value, to_unit:$("cv-to").value };
+    let data;
+    try { const r=await fetch("/api/compute/{{ calc.slug }}",{method:"POST",
+            headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+          data=await r.json(); }
+    catch(e){ $("viz-out").textContent="compute error"; return; }
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("cv-disc").textContent = "⚠ " + data.disclaimer;
+    if (data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; ctx.clearRect(0,0,cv.width,cv.height); last=null; return; }
+    $("viz-out").innerHTML = `<b>${fmt(data.result)}</b> ${data.result_unit||""}`;
+    try{ if(window.__ncExplain) window.__ncExplain(data.explanation); }catch(e){}
+    last = data; draw(data);
+  }
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const W=cv.width,H=cv.height,padL=14,padR=14,baseY=H-46;
+    // collect markers: benchmarks (base units) + the converted value's base
+    const marks=[];
+    (d.benchmarks||[]).forEach(b=>marks.push({label:b.label, base:b.base, you:false}));
+    const youBase = (d.base_value!==undefined)? d.base_value : d.result;
+    marks.push({label:"Your value", base:youBase, you:true});
+    const vals=marks.map(m=>Math.abs(m.base)).filter(v=>v>0);
+    const maxV=Math.max.apply(null,vals.concat([1]));
+    // log scale for wide ranges
+    const useLog = (Math.max.apply(null,vals) / Math.min.apply(null,vals)) > 1000;
+    function xpos(v){
+      v=Math.abs(v); if(v<=0) v=maxV*1e-9;
+      const frac = useLog ? (Math.log10(v)-Math.log10(maxV*1e-9))/(Math.log10(maxV)-Math.log10(maxV*1e-9))
+                          : v/maxV;
+      return padL + frac*(W-padL-padR);
+    }
+    // axis
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(padL,baseY); ctx.lineTo(W-padR,baseY); ctx.stroke();
+    ctx.font="12px "+(NCSkin.sans||"sans-serif");
+    marks.forEach((m,i)=>{
+      const x=xpos(m.base);
+      const col = m.you ? NCSkin.accent : NCSkin.inkSoft;
+      // bar
+      ctx.fillStyle = m.you ? NCSkin.accent : NCSkin.paper2;
+      ctx.strokeStyle = col;
+      const barW=10, barH = m.you?64:42;
+      ctx.fillRect(x-barW/2, baseY-barH, barW, barH);
+      ctx.strokeRect(x-barW/2, baseY-barH, barW, barH);
+      // label
+      ctx.fillStyle=NCSkin.ink; ctx.save(); ctx.translate(x, baseY+8);
+      ctx.rotate(-Math.PI/9); ctx.textAlign="right";
+      ctx.fillText(m.label, 0, 6); ctx.restore();
+    });
+    ctx.fillStyle=NCSkin.inkSoft; ctx.textAlign="left";
+    ctx.fillText(useLog?"(logarithmic scale, base unit "+(d.base_unit||"")+")":"(linear scale, base unit "+(d.base_unit||"")+")", padL, 16);
+  }
+  ["cv-val","cv-from","cv-to"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last); });
+  styleFields(); update();
+})();
+</script>
+

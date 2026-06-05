@@ -1,0 +1,87 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Amount
+      <span class="nc-field"><input id="fx-amt" type="number" value="100" step="any"></span>
+    </label>
+    <label>From
+      <span class="nc-field"><select id="fx-from"></select></span>
+    </label>
+    <label>To
+      <span class="nc-field"><select id="fx-to"></select></span>
+    </label>
+  </div>
+  <div id="fx-warn" style="display:none;font-size:.9rem;margin:.5rem 0;padding:8px 10px;border-radius:6px"></div>
+  <div class="viz-out" id="viz-out"></div>
+  <div class="viz-explain" id="fx-explain" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="fx-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const API = "https://api.frankfurter.app";
+  const CCY = ["AUD","USD","EUR","GBP","JPY","CAD","NZD","CHF","CNY","INR","SGD","HKD","ZAR","SEK","NOK"];
+  let explained=false;
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$("fx-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+    const w=$("fx-warn"); if(w){ w.style.background="hsl(40 80% 88%)"; w.style.color="hsl(30 60% 25%)"; w.style.border="1px solid hsl(40 70% 60%)"; }
+    styleExplain();
+  }
+  function styleExplain(){
+    const box=$("fx-explain"); if(!box) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{ c.style.background=NCSkin.paper2; c.style.border="1px solid "+NCSkin.rule; c.style.borderRadius="8px"; c.style.padding="12px 14px"; c.style.marginBottom="10px"; });
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{ h.style.color=NCSkin.accent; h.style.fontFamily=NCSkin.mono||"monospace"; h.style.fontSize="14px"; h.style.margin="0 0 6px"; h.style.fontWeight="600"; });
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{ p.style.color=NCSkin.ink; p.style.fontSize="14.5px"; p.style.lineHeight="1.55"; p.style.margin="0"; });
+  }
+  function renderExplain(items){
+    const box=$("fx-explain"); if(!box||!items||!items.length){ if(box)box.innerHTML=""; return; }
+    box.innerHTML = items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    styleExplain();
+  }
+  function fillSelects(){
+    const fo=CCY.map(c=>`<option value="${c}">${c}</option>`).join("");
+    $("fx-from").innerHTML=fo; $("fx-to").innerHTML=fo;
+    $("fx-from").value="USD"; $("fx-to").value="AUD";
+  }
+  function warn(msg){ const w=$("fx-warn"); if(msg){ w.textContent="⚠ "+msg; w.style.display="block"; } else { w.style.display="none"; } }
+  async function fetchRate(from,to){
+    if(from===to) return 1.0;
+    const r=await fetch(`${API}/latest?from=${from}&to=${to}`);
+    if(!r.ok) throw new Error("rate http "+r.status);
+    const j=await r.json(); return j.rates[to];
+  }
+  async function postCompute(amt,rate,from,to){
+    const r=await fetch("/api/compute/{{ calc.slug }}",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({amount:amt, rate:rate, from_cur:from, to_cur:to})});
+    return r.json();
+  }
+  async function update(){
+    const amt=+$("fx-amt").value, from=$("fx-from").value, to=$("fx-to").value;
+    let rate=null, offline=false;
+    try { rate=await fetchRate(from,to); } catch(e){ offline=true; }
+    const data=await postCompute(amt, offline?null:rate, from, to);
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("fx-disc").textContent = "⚠ " + data.disclaimer;
+    if(!explained && data.explanation){ renderExplain(data.explanation); explained=true; }
+    if (offline || data.error){
+      warn(data.error || "Currency data unavailable — please try again shortly.");
+      $("viz-out").innerHTML = "<b>"+(data.error || "Currency data unavailable.")+"</b>";
+      return;
+    }
+    warn(null);
+    $("viz-out").innerHTML = `<b>${(Math.round(data.result*100)/100)}</b> ${to} <span style="opacity:.7;font-size:.8em">@ ${rate}</span>`;
+  }
+  ["fx-amt","fx-from","fx-to"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  window.addEventListener("nc-theme-change", styleFields);
+  fillSelects(); styleFields(); update();
+})();
+</script>

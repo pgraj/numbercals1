@@ -1,0 +1,135 @@
+{# Calorie target: macro pie + an always-visible advisory banner.
+   The advisory is rendered prominently, not hidden in fine print. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>TDEE (kcal/day)<input id="in-tdee" type="number" value="2400" step="50" min="0"></label>
+    <label>Sex
+      <select id="in-sex">
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+        <option value="other">Other</option>
+      </select>
+    </label>
+    <label>Goal
+      <select id="in-goal">
+        <option value="maintain">Maintain</option>
+        <option value="lose">Gentle loss</option>
+        <option value="gain">Gentle gain</option>
+      </select>
+    </label>
+  </div>
+  <p style="font-size:.82rem;opacity:.7;margin:.4rem 0 0">Don't have your TDEE? Use the TDEE calculator first, then bring the number here.</p>
+  <div id="advisory" style="margin-top:12px;padding:10px 12px;border-radius:8px;font-size:.9rem;line-height:1.5"></div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="cal-chart" width="640" height="320" style="margin-top:14px;width:100%;height:auto;max-width:640px"></canvas>
+  <p class="viz-caption" id="cal-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+  <p class="viz-disclaimer" id="cal-disc" style="font-size:.82rem;line-height:1.5;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg; el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px"; el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+    const adv = document.getElementById("advisory");
+    adv.style.background = NCSkin.paper2;
+    adv.style.border = "1px solid " + NCSkin.rule;
+    adv.style.color = NCSkin.ink;
+    const disc = document.getElementById("cal-disc");
+    if(disc){ disc.style.background = NCSkin.paper2; disc.style.color = NCSkin.inkSoft;
+              disc.style.border = "1px solid " + NCSkin.rule; }
+  }
+  function macroColour(name){
+    switch(name){
+      case "Carbohydrate": return "hsl(205 55% 55%)";
+      case "Protein":      return NCSkin.yes;
+      case "Fat":          return NCSkin.accent;
+      default:             return NCSkin.inkSoft;
+    }
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("cal-chart"), ctx = cv.getContext("2d");
+  let last = null;
+
+  async function update(){
+    const body = { tdee:+$("in-tdee").value, sex:$("in-sex").value, goal:$("in-goal").value };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("cal-disc").textContent = "⚠ " + data.disclaimer;
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("advisory").textContent=""; $("cal-caption").textContent="";
+      ctx.clearRect(0,0,cv.width,cv.height); last=null; return;
+    }
+
+    // Advisory is always shown; floor note is emphasised when triggered.
+    let advHTML = "ⓘ " + data.advisory;
+    if (data.floored){
+      advHTML = "⚠ This estimate was raised to a safe minimum. " + data.advisory;
+      $("advisory").style.borderColor = NCSkin.accent;
+    } else {
+      $("advisory").style.borderColor = NCSkin.rule;
+    }
+    $("advisory").innerHTML = advHTML;
+
+    $("viz-out").innerHTML =
+      `Educational target: <b>${data.range_low}–${data.range_high}</b> kcal/day ` +
+      `&nbsp;(${data.goal_label})`;
+    $("cal-caption").innerHTML =
+      `The pie shows how the target calories split across the three macronutrients. The slices ` +
+      `are proportions; the labels give the grams of each per day. Individual needs vary — treat ` +
+      `this as orientation, not a fixed plan.`;
+    last = data; draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const cx=200, cy=cv.height/2, R=110;
+    let a0 = -Math.PI/2;
+    const total = d.macros.reduce((s,m)=>s+m.pct,0) || 100;
+    d.macros.forEach(m=>{
+      const a1 = a0 + (m.pct/total)*2*Math.PI;
+      ctx.beginPath(); ctx.moveTo(cx,cy);
+      ctx.arc(cx,cy,R,a0,a1); ctx.closePath();
+      ctx.fillStyle = macroColour(m.name); ctx.fill();
+      // pct label on slice
+      const mid=(a0+a1)/2;
+      ctx.fillStyle = "#fff"; ctx.textAlign="center";
+      ctx.font="bold 13px "+(NCSkin.mono||"monospace");
+      ctx.fillText(m.pct+"%", cx+Math.cos(mid)*R*0.6, cy+Math.sin(mid)*R*0.6+4);
+      a0 = a1;
+    });
+
+    // legend with grams
+    let ly = cy-50; const lx = cx+R+50;
+    ctx.textAlign="left";
+    d.macros.forEach(m=>{
+      ctx.fillStyle = macroColour(m.name); ctx.fillRect(lx,ly,14,14);
+      ctx.fillStyle = NCSkin.ink; ctx.font="13px "+(NCSkin.mono||"monospace");
+      ctx.fillText(`${m.name}: ${m.grams} g  (${m.kcal} kcal)`, lx+20, ly+12);
+      ly += 28;
+    });
+  }
+
+  ["in-tdee","in-sex","in-goal"].forEach(id=>{
+    const el=$(id); el.addEventListener("input", update); el.addEventListener("change", update);
+  });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last); });
+  styleFields();
+  update();
+})();
+</script>

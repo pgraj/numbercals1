@@ -1,0 +1,110 @@
+{# Heart-rate zones: five coloured segments from warm-up to red line, each with its bpm window. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Age<input id="in-age" type="number" value="35" step="1" min="1" max="120"></label>
+    <label>Resting HR (optional)<input id="in-resting_hr" type="number" value="60" step="1" min="0"></label>
+  </div>
+  <p style="font-size:.82rem;opacity:.7;margin:.4rem 0 0">Leave resting HR at 0 to use the simple % of max; enter it to use Karvonen.</p>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="hr-chart" width="640" height="300" style="margin-top:14px;width:100%;height:auto;max-width:640px"></canvas>
+  <p class="viz-caption" id="hr-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+  <p class="viz-disclaimer" id="hr-disc" style="font-size:.82rem;line-height:1.5;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg; el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px"; el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+    const disc = document.getElementById("hr-disc");
+    if(disc){ disc.style.background = NCSkin.paper2; disc.style.color = NCSkin.inkSoft;
+              disc.style.border = "1px solid " + NCSkin.rule; }
+  }
+  function zoneColour(tone){
+    switch(tone){
+      case "z1": return NCSkin.inkSoft;          // grey  — warm up
+      case "z2": return "hsl(205 60% 52%)";      // blue  — fat burn
+      case "z3": return NCSkin.yes;              // green — aerobic
+      case "z4": return "hsl(38 80% 52%)";       // amber — anaerobic
+      case "z5": return NCSkin.accent;           // red/sienna — red line
+      default:   return NCSkin.inkSoft;
+    }
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("hr-chart"), ctx = cv.getContext("2d");
+  let last = null;
+
+  async function update(){
+    const body = { age:+$("in-age").value, resting_hr:+$("in-resting_hr").value };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("hr-disc").textContent = "⚠ " + data.disclaimer;
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("hr-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height); last=null; return;
+    }
+    let rhr = data.resting_hr ? ` · resting ${data.resting_hr}` : "";
+    $("viz-out").innerHTML =
+      `Max HR: <b>${data.max_hr}</b> bpm &nbsp; Method: <b>${data.method}</b>${rhr}`;
+    $("hr-caption").innerHTML =
+      `Each band is a training zone, easy on the left to maximal on the right. The numbers under ` +
+      `each band are its heart-rate window in beats per minute — the range to aim for in that zone.`;
+    last = data; draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const padX=30, barY=60, barH=70, W=cv.width-2*padX;
+    const n = d.zones.length, seg = W/n;
+
+    d.zones.forEach((z,i)=>{
+      const x = padX + seg*i;
+      ctx.fillStyle = zoneColour(z.tone);
+      ctx.fillRect(x, barY, seg-3, barH);
+
+      // zone name
+      ctx.fillStyle = "#fff"; ctx.textAlign="center";
+      ctx.font="bold 12px "+(NCSkin.mono||"monospace");
+      ctx.fillText(z.label, x+(seg-3)/2, barY+barH/2-4);
+      // % range inside
+      ctx.font="10px "+(NCSkin.mono||"monospace");
+      ctx.fillText(z.low_pct+"–"+z.high_pct+"%", x+(seg-3)/2, barY+barH/2+12);
+
+      // bpm window below
+      ctx.fillStyle = NCSkin.ink;
+      ctx.font="11px "+(NCSkin.mono||"monospace");
+      ctx.fillText(z.low_bpm+"–"+z.high_bpm, x+(seg-3)/2, barY+barH+18);
+      ctx.fillStyle = NCSkin.inkSoft; ctx.font="9px "+(NCSkin.mono||"monospace");
+      ctx.fillText("bpm", x+(seg-3)/2, barY+barH+30);
+    });
+
+    // max HR marker at the right end
+    ctx.fillStyle = NCSkin.ink; ctx.textAlign="right";
+    ctx.font="bold 12px "+(NCSkin.mono||"monospace");
+    ctx.fillText("Max "+d.max_hr+" bpm", padX+W, barY-12);
+    ctx.textAlign="left";
+    ctx.fillText((d.zones[0].low_bpm)+" bpm", padX, barY-12);
+  }
+
+  ["in-age","in-resting_hr"].forEach(id=>{
+    const el=$(id); el.addEventListener("input", update); el.addEventListener("change", update);
+  });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last); });
+  styleFields();
+  update();
+})();
+</script>

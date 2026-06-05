@@ -1,0 +1,34 @@
+{# Reusable SEO head. Included by base.html for EVERY page automatically.
+   Per-page values come from {% block %} overrides; sensible site defaults
+   otherwise. This is what makes each plugged-in calculator individually
+   indexable and ad-network friendly. #}
+{# Clean canonical URL: base (scheme+host) + path, WITHOUT query string.
+   Using request.url directly would canonicalise ?q=, ?utm_=, etc. as distinct
+   pages and split ranking signal. base_url ends with '/', path starts with
+   '/', so trim one slash when joining. #}
+{% set _canonical = (request.base_url | string).rstrip('/') ~ request.url.path %}
+<link rel="canonical" href="{{ _canonical }}">
+<meta name="robots" content="index, follow, max-image-preview:large">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{ site_name }}">
+<meta property="og:title" content="{{ page_title | default(site_name) }}">
+<meta property="og:description" content="{{ page_description | default(tagline) }}">
+<meta property="og:url" content="{{ _canonical }}">
+
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="{{ page_title | default(site_name) }}">
+<meta name="twitter:description" content="{{ page_description | default(tagline) }}">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "{{ site_name }}",
+  "applicationCategory": "EducationalApplication",
+  "description": "{{ tagline }}",
+  "url": "{{ request.base_url }}",
+  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+}
+</script>
+

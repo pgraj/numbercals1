@@ -1,0 +1,133 @@
+{# Ideal-weight range: healthy band with the Devine point, plus a current-weight marker and status. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Sex
+      <select id="in-sex">
+        <option value="male">Male</option><option value="female">Female</option><option value="other">Other</option>
+      </select>
+    </label>
+    <label>Height
+      <span class="nc-field">
+        <input id="in-height" type="number" value="5" step="0.25" min="0">
+        <select id="u-height">
+          <option value="ft">ft + in</option><option value="cm">cm</option>
+          <option value="m">m</option><option value="in">in</option>
+        </select>
+        <input id="in-height2" type="number" value="10" step="0.5" min="0"
+               style="width:5.5em" placeholder="in" title="inches">
+      </span>
+    </label>
+    <label>Current weight
+      <span class="nc-field">
+        <input id="in-current" type="number" value="78" step="0.5" min="0">
+        <select id="u-weight"><option value="kg">kg</option><option value="lb">lb</option></select>
+      </span>
+    </label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="iw-chart" width="640" height="200" style="margin-top:14px;width:100%;height:auto;max-width:640px"></canvas>
+  <p class="viz-caption" id="iw-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+  <p class="viz-disclaimer" id="iw-disc" style="font-size:.82rem;line-height:1.5;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg; el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule; el.style.borderRadius = "6px"; el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+    const disc = document.getElementById("iw-disc");
+    if(disc){ disc.style.background = NCSkin.paper2; disc.style.color = NCSkin.inkSoft; disc.style.border = "1px solid " + NCSkin.rule; }
+  }
+  function statusColour(s){
+    switch(s){
+      case "Underweight": return "hsl(205 55% 55%)";
+      case "Normal":      return NCSkin.yes;
+      case "Overweight":  return "hsl(38 75% 52%)";
+      case "Obese":       return NCSkin.accent;
+      default:            return NCSkin.inkSoft;
+    }
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("iw-chart"), ctx = cv.getContext("2d");
+  let last = null;
+  function syncHeightUnit(){ $("in-height2").style.display = ($("u-height").value==="ft")?"":"none"; }
+
+  async function update(){
+    syncHeightUnit();
+    const body = {
+      sex:$("in-sex").value,
+      height_ft:+$("in-height").value, height_unit:$("u-height").value, height_in:+$("in-height2").value,
+      current_weight_kg:+$("in-current").value, weight_unit:$("u-weight").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("iw-disc").textContent = "⚠ " + data.disclaimer;
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("iw-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height); last=null; return;
+    }
+    let statusBadge = "";
+    if (data.status){
+      statusBadge = ` &nbsp; Status: <b style="color:${statusColour(data.status)}">${data.status}</b>` +
+                    (data.bmi ? ` (BMI ${data.bmi})` : "");
+    }
+    $("viz-out").innerHTML =
+      `Ideal: <b>${data.ideal_kg} kg</b> &nbsp; Healthy band: <b>${data.low_kg}–${data.high_kg} kg</b>` + statusBadge;
+    let rel = data.relation ? ` Your weight is <b>${data.relation}</b> the healthy band.` : "";
+    $("iw-caption").innerHTML =
+      `The shaded band is the healthy range around the Devine estimate of <b>${data.ideal_kg} kg</b>. ` +
+      `The dashed line is the formula's exact figure.` + rel;
+    last = data; draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const padX=50, axisY=110, W=cv.width-2*padX;
+    const vals = [d.low_kg, d.high_kg, d.ideal_kg];
+    if (d.current_kg) vals.push(d.current_kg);
+    let lo = Math.min(...vals)*0.85, hi = Math.max(...vals)*1.15;
+    const X = v => padX + (v-lo)/(hi-lo)*W;
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(padX,axisY); ctx.lineTo(padX+W,axisY); ctx.stroke();
+    ctx.fillStyle = NCSkin.yes; ctx.globalAlpha = 0.30;
+    ctx.fillRect(X(d.low_kg), axisY-22, X(d.high_kg)-X(d.low_kg), 44);
+    ctx.globalAlpha = 1; ctx.strokeStyle = NCSkin.yes; ctx.lineWidth = 1.5;
+    ctx.strokeRect(X(d.low_kg), axisY-22, X(d.high_kg)-X(d.low_kg), 44);
+    ctx.fillStyle = NCSkin.ink; ctx.font = "11px "+(NCSkin.mono||"monospace"); ctx.textAlign="center";
+    ctx.fillText(d.low_kg, X(d.low_kg), axisY+40); ctx.fillText(d.high_kg, X(d.high_kg), axisY+40);
+    ctx.strokeStyle = NCSkin.inkSoft; ctx.setLineDash([4,4]); ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(X(d.ideal_kg),axisY-30); ctx.lineTo(X(d.ideal_kg),axisY+26); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = NCSkin.ink; ctx.fillText("ideal "+d.ideal_kg, X(d.ideal_kg), axisY-36);
+    if (d.current_kg){
+      const cxp = X(d.current_kg);
+      ctx.fillStyle = NCSkin.accent;
+      ctx.beginPath(); ctx.moveTo(cxp, axisY-26); ctx.lineTo(cxp-7, axisY-40); ctx.lineTo(cxp+7, axisY-40);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = NCSkin.accent; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(cxp, axisY-26); ctx.lineTo(cxp, axisY+26); ctx.stroke();
+      ctx.fillStyle = NCSkin.accent; ctx.font="bold 12px "+(NCSkin.mono||"monospace");
+      ctx.fillText("you "+d.current_kg, cxp, axisY+56);
+    }
+  }
+
+  ["in-sex","in-height","u-height","in-height2","in-current","u-weight"].forEach(id=>{
+    const el=$(id); el.addEventListener("input", update); el.addEventListener("change", update);
+  });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last); });
+  styleFields(); syncHeightUnit();
+  update();
+})();
+</script>

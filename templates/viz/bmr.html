@@ -1,0 +1,113 @@
+{# BMR comparison bars: your resting burn vs everyday energy references. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Sex
+      <select id="in-sex">
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+        <option value="other">Other</option>
+      </select>
+    </label>
+    <label>Age<input id="in-age" type="number" value="30" step="1" min="0"></label>
+    <label>Weight
+      <span class="nc-field">
+        <input id="in-weight" type="number" value="70" step="0.5" min="0">
+        <select id="u-weight"><option value="kg">kg</option><option value="lb">lb</option></select>
+      </span>
+    </label>
+    <label>Height
+      <span class="nc-field">
+        <input id="in-height" type="number" value="175" step="0.5" min="0">
+        <select id="u-height">
+          <option value="cm">cm</option><option value="m">m</option>
+          <option value="in">in</option><option value="ft">ft + in</option>
+        </select>
+        <input id="in-height2" type="number" value="0" step="0.5" min="0"
+               style="display:none;width:5.5em" placeholder="in" title="inches">
+      </span>
+    </label>
+  </div>
+  <p style="font-size:.82rem;opacity:.7;margin:.4rem 0 0">Male/female are the formula's defined variants; “Other” uses the midpoint.</p>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="bmr-chart" width="640" height="320" style="margin-top:14px;width:100%;height:auto;max-width:640px"></canvas>
+  <p class="viz-caption" id="bmr-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+  <p class="viz-disclaimer" id="bmr-disc" style="font-size:.82rem;line-height:1.5;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg; el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px"; el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+    const disc = document.getElementById("bmr-disc");
+    if(disc){ disc.style.background = NCSkin.paper2; disc.style.color = NCSkin.inkSoft;
+              disc.style.border = "1px solid " + NCSkin.rule; }
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("bmr-chart"), ctx = cv.getContext("2d");
+  let last = null;
+  function syncHeightUnit(){ $("in-height2").style.display = ($("u-height").value==="ft")?"":"none"; }
+
+  async function update(){
+    syncHeightUnit();
+    const body = {
+      sex:$("in-sex").value, age:+$("in-age").value,
+      weight_kg:+$("in-weight").value, weight_unit:$("u-weight").value,
+      height_cm:+$("in-height").value, height_unit:$("u-height").value, height_in2:+$("in-height2").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("bmr-disc").textContent = "⚠ " + data.disclaimer;
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("bmr-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height); last=null; return;
+    }
+    $("viz-out").innerHTML = `Basal Metabolic Rate: <b>${data.bmr}</b> kcal/day`;
+    $("bmr-caption").innerHTML =
+      `The highlighted bar is your resting burn of <b>${data.bmr}</b> kcal a day — the energy ` +
+      `used before any movement. The other bars are everyday references at the same scale.`;
+    last = data; draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const pad=46, W=cv.width-2*pad, H=cv.height-2*pad;
+    const pts=d.series; if(!pts||!pts.length) return;
+    const maxV = Math.max(...pts.map(p=>p.kcal), 1);
+    const slot = W/pts.length, bw = Math.min(slot*0.55, 70);
+    const X = i => pad + slot*i + (slot-bw)/2;
+    const Y = v => pad + H - (v/maxV)*H;
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad,Y(0)); ctx.lineTo(pad+W,Y(0)); ctx.stroke();
+    pts.forEach((p,i)=>{
+      const x = X(i);
+      ctx.fillStyle = p.self ? NCSkin.accent : NCSkin.inkSoft;
+      ctx.fillRect(x, Y(p.kcal), bw, Y(0)-Y(p.kcal));
+      ctx.fillStyle = NCSkin.ink; ctx.font = "bold 12px "+(NCSkin.mono||"monospace"); ctx.textAlign = "center";
+      ctx.fillText(p.kcal, x+bw/2, Y(p.kcal)-6);
+      ctx.font = "11px "+(NCSkin.mono||"monospace"); ctx.fillStyle = NCSkin.inkSoft;
+      p.label.split(" ").forEach((word, k)=>{ ctx.fillText(word, x+bw/2, Y(0)+16+k*12); });
+    });
+  }
+
+  ["in-sex","in-age","in-weight","u-weight","in-height","u-height","in-height2"].forEach(id=>{
+    const el=$(id); el.addEventListener("input", update); el.addEventListener("change", update);
+  });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last); });
+  styleFields(); syncHeightUnit();
+  update();
+})();
+</script>

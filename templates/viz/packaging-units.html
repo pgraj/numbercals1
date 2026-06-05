@@ -1,0 +1,75 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Quantity
+      <span class="nc-field">
+        <input id="pk-qty" type="number" value="2" step="any">
+        <select id="pk-level">
+          <option value="Pallet" selected>Pallet</option>
+          <option value="Case">Case</option>
+          <option value="Pack">Pack</option>
+          <option value="Unit">Unit</option>
+        </select>
+      </span>
+    </label>
+    <label>Cases / pallet
+      <span class="nc-field"><input id="pk-cpp" type="number" value="40" step="any" min="1"></span>
+    </label>
+    <label>Packs / case
+      <span class="nc-field"><input id="pk-ppc" type="number" value="12" step="any" min="1"></span>
+    </label>
+    <label>Units / pack
+      <span class="nc-field"><input id="pk-upp" type="number" value="24" step="any" min="1"></span>
+    </label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <div id="pk-rollup" style="margin-top:10px;font-size:15px;line-height:1.7"></div>
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="pk-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  let explained=false;
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{ el.style.background=bg; el.style.color=NCSkin.ink; el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$("pk-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+    const ru=$("pk-rollup"); if(ru) ru.style.color=NCSkin.ink;
+    styleExplain();
+  }
+  function styleExplain(){
+    const box=$("nc-explain-box"); if(!box) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  function renderExplain(items){
+    const box=$("nc-explain-box"); if(!box||!items||!items.length){ if(box)box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    styleExplain();
+  }
+  function fmt(x){ return (Math.round(x*100)/100).toLocaleString(); }
+  async function update(){
+    const body={ quantity:+$("pk-qty").value, level:$("pk-level").value,
+      cases_per_pallet:+$("pk-cpp").value, packs_per_case:+$("pk-ppc").value, units_per_pack:+$("pk-upp").value };
+    let data;
+    try { const r=await fetch("/api/compute/{{ calc.slug }}",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $("viz-out").textContent="compute error"; return; }
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("pk-disc").textContent = "⚠ " + data.disclaimer;
+    if(!explained && data.explanation){ renderExplain(data.explanation); explained=true; }
+    if (data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; $("pk-rollup").innerHTML=""; return; }
+    const b=data.breakdown;
+    $("viz-out").innerHTML = `<b>${fmt(data.result)}</b> units`;
+    $("pk-rollup").innerHTML =
+      `That is <b>${fmt(b.Pallet)}</b> pallets &nbsp;·&nbsp; <b>${fmt(b.Case)}</b> cases &nbsp;·&nbsp; <b>${fmt(b.Pack)}</b> packs &nbsp;·&nbsp; <b>${fmt(b.Unit)}</b> units.`;
+  }
+  ["pk-qty","pk-level","pk-cpp","pk-ppc","pk-upp"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  window.addEventListener("nc-theme-change", styleFields);
+  styleFields(); update();
+})();
+</script>

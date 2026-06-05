@@ -1,0 +1,133 @@
+<link rel="stylesheet" href="/static/nclearn.css">
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Slant range (m)
+      <span class="nc-field"><input id="od-s" type="number" value="600" step="any" min="1"></span></label>
+    <label>Beam angle below horizontal (°)
+      <span class="nc-field"><input id="od-a" type="number" value="35" step="any" min="1" max="89"></span></label>
+    <label>Drag the beam angle
+      <span class="nc-field"><input id="od-range" type="range" value="35" min="5" max="85" step="1" style="width:200px"></span></label>
+  </div>
+
+  <div class="viz-out" id="od-out"></div>
+
+  <canvas id="od-diagram" width="680" height="420"
+          style="display:block;width:100%;height:auto;max-width:600px;margin:10px auto 0"></canvas>
+  <p class="viz-caption" id="od-cap" style="font-size:.85rem;text-align:center;margin-top:.4rem;opacity:.85"></p>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="od-disc" style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const slug = "{{ calc.slug }}";
+  const P = "od";
+  const panel = document.querySelector('.viz-panel[data-slug="'+slug+'"]');
+  let last = null;
+
+  function styleFields(){
+    if(!window.NCSkin || !panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      if(el.type==="range") return;
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  function buildBody(){
+    return { slant_range:$("od-s").value, angle_deg:$("od-a").value };
+  }
+
+  async function update(){
+    const body = buildBody();
+    let data;
+    try { const r=await fetch("/api/compute/"+slug,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $(P+"-out").textContent="compute error"; return; }
+    try { if(window.NCSteps) window.NCSteps.render(data.steps||[]); } catch(e){}
+    if (data.disclaimer) $(P+"-disc").textContent="\u26a0 "+data.disclaimer;
+    if (data.error){ $(P+"-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} drawScene(null); last=null; mountLearn(null); return; }
+    $(P+"-out").innerHTML = "<b>Depth \u2248 "+data.result+" m</b>  \u00b7  offset "+fmt(data.offset)+" m";
+    try{ window.__ncExplain(data.explanation);}catch(e){}
+    last=data; drawScene(data); mountLearn(data);
+  }
+
+  function mountLearn(data){
+    if(!window.NCLearn) return;
+    NCLearn.mount({ slug:slug, panel:panel, data:data, drawFrame:(data?drawFrame:undefined) });
+  }
+  function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
+
+  function drawScene(d){ drawAt(d,1); }
+  function drawAt(d, sweep){
+    const cv=$(P+"-diagram"); if(!cv) return; const ctx=cv.getContext("2d"); const s=window.NCSkin||{};
+    const ink=s.ink||"#222", accent=s.accent||"#b5651d", yes=s.yes||"#3a7d44", soft=s.inkSoft||"#777", rule=s.rule||"#ccc";
+    const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H); const cap=$(P+"-cap");
+    if(!d){ if(cap) cap.textContent=""; return; }
+    const slant=d.slant_range, ang=d.angle_deg, depth=d.depth, offset=d.offset;
+    const seaY=80, vesselX=90, budget=H-seaY-60, span=W-vesselX-70;
+    const sc=Math.min(budget/Math.max(depth,1), span/Math.max(offset,1));
+    const hitX=vesselX+offset*sc, hitY=seaY+depth*sweep*sc;
+    // sea surface
+    ctx.strokeStyle=accent; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(40,seaY); ctx.lineTo(W-40,seaY); ctx.stroke();
+    ctx.fillStyle=soft; ctx.font="12px "+(s.sans||"sans-serif"); ctx.textAlign="left"; ctx.fillText("sea surface", 44, seaY-6);
+    // water tint
+    ctx.globalAlpha=0.06; ctx.fillStyle=accent; ctx.fillRect(40,seaY,W-80,H-seaY-30); ctx.globalAlpha=1;
+    // vessel
+    ctx.fillStyle=ink; ctx.beginPath(); ctx.moveTo(vesselX-22,seaY); ctx.lineTo(vesselX+22,seaY); ctx.lineTo(vesselX+14,seaY-14); ctx.lineTo(vesselX-14,seaY-14); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=soft; ctx.textAlign="center"; ctx.fillText("vessel", vesselX, seaY-20);
+    // vertical depth reference at hit
+    ctx.strokeStyle=yes; ctx.setLineDash([3,3]); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(hitX,seaY); ctx.lineTo(hitX,hitY); ctx.stroke(); ctx.setLineDash([]);
+    // horizontal offset reference
+    ctx.strokeStyle=rule; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.moveTo(vesselX,seaY); ctx.lineTo(hitX,seaY); ctx.stroke(); ctx.setLineDash([]);
+    // sonar beam (sweeps down to seabed)
+    ctx.strokeStyle=accent; ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(vesselX,seaY); ctx.lineTo(hitX,hitY); ctx.stroke();
+    // seabed mark
+    ctx.fillStyle=ink; ctx.beginPath(); ctx.arc(hitX,hitY,5,0,Math.PI*2); ctx.fill();
+    // seabed wavy line
+    ctx.strokeStyle=soft; ctx.lineWidth=2; ctx.beginPath();
+    for(let x=60;x<=W-40;x+=14){ const yy=hitY+8*Math.sin(x/26)+10; if(x===60)ctx.moveTo(x,yy); else ctx.lineTo(x,yy);} ctx.stroke();
+    // beam angle arc at vessel (below horizontal)
+    ctx.strokeStyle=yes; ctx.lineWidth=2; const a1=Math.atan2(hitY-seaY, hitX-vesselX);
+    ctx.beginPath(); ctx.arc(vesselX,seaY,30,0,a1); ctx.stroke();
+    ctx.fillStyle=yes; ctx.font="bold 13px "+(s.mono||"monospace"); ctx.textAlign="left"; ctx.fillText(fmt(ang)+"\u00b0", vesselX+36, seaY+18);
+    // labels
+    ctx.fillStyle=soft; ctx.font="12px "+(s.sans||"sans-serif"); ctx.textAlign="center";
+    ctx.fillText("offset "+fmt(offset)+" m", (vesselX+hitX)/2, seaY-6);
+    ctx.fillStyle=yes; ctx.save(); ctx.translate(hitX+14,(seaY+hitY)/2); ctx.rotate(-Math.PI/2); ctx.fillText("depth "+fmt(depth*sweep)+" m",0,0); ctx.restore();
+    ctx.fillStyle=ink; ctx.font="bold 14px "+(s.mono||"monospace"); ctx.textAlign="left"; ctx.fillText("depth \u2248 "+fmt(depth)+" m", 16, 30);
+    if(cap) cap.textContent="The angled sonar beam is the hypotenuse: sine of the beam angle times slant range gives the straight-down depth.";
+  }
+
+  function drawFrame(ctx,t,d){ if(!d) return; drawAt(d,(t<0.75? t/0.75 : 1)); }
+
+  ["od-s","od-a"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  (function(){ const rng=$("od-range"), num=$("od-a"); rng.addEventListener("input",()=>{num.value=rng.value;update();}); num.addEventListener("input",()=>{const v=parseFloat(num.value);if(!isNaN(v)&&v>=5&&v<=85)rng.value=v;}); })();
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) drawScene(last); });
+  styleFields(); update();
+})();
+</script>

@@ -1,0 +1,124 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Temperature
+      <span class="nc-field">
+        <input id="tp-val" type="number" value="100" step="any">
+        <select id="tp-from">
+          <option value="°C" selected>°C</option>
+          <option value="°F">°F</option>
+          <option value="K">K</option>
+          <option value="°R">°R (Rankine)</option>
+        </select>
+      </span>
+    </label>
+    <label>Convert to
+      <span class="nc-field">
+        <select id="tp-to">
+          <option value="°C">°C</option>
+          <option value="°F" selected>°F</option>
+          <option value="K">K</option>
+          <option value="°R">°R (Rankine)</option>
+        </select>
+      </span>
+    </label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="tp-chart" width="360" height="300"
+          style="margin-top:14px;width:100%;height:auto;max-width:360px"></canvas>
+  <p class="viz-caption" id="tp-cap" style="font-size:.9rem;margin-top:.5rem;opacity:.85"></p>
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="tp-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("tp-chart"), ctx = cv.getContext("2d");
+  let last = null;
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$("tp-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+  // theme-safe band hues derived from skin (cool→warm) without hardcoding clashing hex
+  function bandColour(name){
+    const map = { "Freezing":205, "Comfortable":140, "Hot":35, "Danger":8 };
+    const h = map[name] !== undefined ? map[name] : 220;
+    return `hsl(${h} 62% 52%)`;
+  }
+  async function update(){
+    const body = { value:+$("tp-val").value, from_unit:$("tp-from").value, to_unit:$("tp-to").value };
+    let data;
+    try { const r=await fetch("/api/compute/{{ calc.slug }}",{method:"POST",
+            headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+          data=await r.json(); }
+    catch(e){ $("viz-out").textContent="compute error"; return; }
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("tp-disc").textContent = "⚠ " + data.disclaimer;
+    if (data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; ctx.clearRect(0,0,cv.width,cv.height); last=null; return; }
+    $("viz-out").innerHTML = `<b>${(Math.round(data.result*100)/100)}</b> ${data.result_unit}`;
+    try{ if(window.__ncExplain) window.__ncExplain(data.explanation); }catch(e){}
+    last = data; draw(data);
+  }
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const W=cv.width,H=cv.height, cx=W/2, cy=H-30, R=Math.min(W,H*2)/2-30;
+    const zones = d.zones || [];
+    // dial spans -50°C..100°C over 180° (left=cold, right=hot)
+    const TMIN=-50, TMAX=100;
+    const ang = c => Math.PI + ( (Math.max(TMIN,Math.min(TMAX,c)) - TMIN)/(TMAX-TMIN) ) * Math.PI;
+    // banded arcs
+    zones.forEach(z=>{
+      ctx.beginPath();
+      ctx.arc(cx,cy,R, ang(z.from_c), ang(z.to_c));
+      ctx.lineWidth=26; ctx.strokeStyle=bandColour(z.label); ctx.stroke();
+    });
+    // band labels
+    ctx.font="11px "+(NCSkin.sans||"sans-serif"); ctx.fillStyle=NCSkin.ink; ctx.textAlign="center";
+    zones.forEach(z=>{
+      const a=ang((z.from_c+z.to_c)/2); const lr=R+18;
+      ctx.fillText(z.label, cx+Math.cos(a)*lr, cy+Math.sin(a)*lr+3);
+    });
+    // needle at current celsius
+    const c = d.celsius;
+    const a = ang(c);
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.lineTo(cx+Math.cos(a)*(R-4), cy+Math.sin(a)*(R-4));
+    ctx.lineWidth=3; ctx.strokeStyle=NCSkin.accent; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx,cy,6,0,2*Math.PI); ctx.fillStyle=NCSkin.accent; ctx.fill();
+    // centre readout
+    ctx.fillStyle=NCSkin.ink; ctx.font="14px "+(NCSkin.mono||"monospace");
+    ctx.fillText((Math.round(c*10)/10)+" °C", cx, cy-R/2);
+    $("tp-cap").textContent = (c<TMIN||c>TMAX) ? "Needle clamped to dial range (−50…100 °C)." : "";
+  }
+  ["tp-val","tp-from","tp-to"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last); });
+  styleFields(); update();
+})();
+</script>
+

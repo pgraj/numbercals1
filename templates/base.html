@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en" data-theme="sepia">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ site_name }}{% endblock %}</title>
+  <meta name="description" content="{% block description %}{{ tagline }}{% endblock %}">
+  <!-- Apply saved theme before paint to avoid a flash of the wrong theme -->
+  <script>try{var t=localStorage.getItem('nc-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/skin.js"></script>
+  {% include "_seo_head.html" %}
+  {% block seo_extra %}{% endblock %}
+  {% if adsense_client %}<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ adsense_client }}" crossorigin="anonymous"></script>{% endif %}
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <!-- Top bar: brand + theme switcher + search only. Sections live in the sidebar. -->
+  <header class="site-header">
+    <button class="nav-toggle" id="nav-toggle" aria-label="Toggle menu">☰</button>
+    <a class="brand" href="/" title="Home" aria-label="NumberCals home">numbercals<span class="brand-slash">/</span></a>
+    <div class="theme-switch" role="group" aria-label="Theme">
+      <button data-theme-set="light" title="Light">☀</button>
+      <button data-theme-set="sepia" title="Sepia">◐</button>
+      <button data-theme-set="dark" title="Dark">☾</button>
+    </div>
+    <form class="nav-search" action="/search" method="get" role="search">
+      <input name="q" type="search" placeholder="Search calculators, formulas, theorems…" aria-label="Search" autocomplete="off">
+      <button type="submit" aria-label="Search">⌕</button>
+    </form>
+    <span class="version-badge" title="Skin / backend versions">skin {{ skin_version }} · api {{ backend_version }}</span>
+  </header>
+
+  <div class="layout">
+    <!-- Left panel: all sections, auto-populated from the registry. -->
+    <aside class="sidebar" id="sidebar">
+      <nav class="side-nav">
+        <div class="side-group">
+          <a href="/" class="side-link side-home-link" style="font-weight:600">⌂ Home</a>
+          <a href="/?calc=standard" class="side-link">🧮 Standard Calculator</a>
+          <a href="/?calc=scientific" class="side-link">ƒ(x) Scientific Calculator</a>
+        </div>
+        <div class="side-group">
+          <div class="side-label">Sections</div>
+
+          <!-- Live filter: type to narrow the whole tree by calculator name.
+               Pure client-side (sidebar.js); no server round trip, no cost. -->
+          <div class="side-filter" role="search">
+            <input type="search" id="side-filter-input"
+                   placeholder="Filter calculators…"
+                   aria-label="Filter calculators in the sidebar"
+                   autocomplete="off">
+            <button type="button" class="side-filter-clear" id="side-filter-clear"
+                    aria-label="Clear filter" hidden>×</button>
+          </div>
+          <p class="side-filter-empty" id="side-filter-empty" hidden>No matches.</p>
+
+          <!-- Accordion. Each section expands IN-RAIL; sub-groups are collapsible
+               <details>, collapsed by default. Every calc stays a real crawlable
+               <a href> in the DOM even when collapsed (SEO-safe). Renders from the
+               registry's nav_tree, so new calculator folders appear automatically. -->
+          <div class="side-accordion">
+            {% for s in nav_tree %}
+            <div class="side-section" data-section="{{ s.id }}">
+              <div class="side-section-row">
+                <button type="button" class="side-section-caret-btn"
+                        aria-expanded="false"
+                        aria-controls="sec-body-{{ s.id }}"
+                        aria-label="Expand {{ s.name }}">
+                  <span class="side-caret" aria-hidden="true">›</span>
+                </button>
+                <a href="/section/{{ s.id }}" class="side-section-link">
+                  <span class="side-section-name">{{ s.glyph }} {{ s.name }}</span>
+                  <span class="count-pill">{{ s.count }}</span>
+                </a>
+                <a href="/section/{{ s.id }}" class="side-section-all"
+                   title="Open the {{ s.name }} section page" aria-label="Open {{ s.name }} section page">↗</a>
+              </div>
+
+              <div class="side-section-body" id="sec-body-{{ s.id }}" role="region"
+                   aria-label="{{ s.name }} calculators">
+                {% for t in s.topics %}
+                {% if t.topic %}
+                {# Named topic -> its own collapsible level wrapping the clusters #}
+                <details class="side-topic">
+                  <summary class="side-topic-summary">
+                    <span class="side-topic-caret" aria-hidden="true">›</span>
+                    <span class="side-topic-name">{{ t.topic }}</span>
+                  </summary>
+                  <div class="side-topic-body">
+                    {% for sub in t.subs %}
+                    <details class="side-sub">
+                      <summary class="side-sub-summary">
+                        <span class="side-sub-caret" aria-hidden="true">›</span>
+                        <span class="side-sub-name">{{ sub.name }}</span>
+                        <span class="side-sub-count">{{ sub.calcs | length }}</span>
+                      </summary>
+                      <div class="side-sub-calcs">
+                        {% for c in sub.calcs %}
+                        <a class="side-calc" href="{{ c.url }}" data-name="{{ c.name | lower }}">{{ c.name }}</a>
+                        {% endfor %}
+                      </div>
+                    </details>
+                    {% endfor %}
+                  </div>
+                </details>
+                {% else %}
+                {# Empty topic -> render clusters directly (un-migrated / flat sections) #}
+                {% for sub in t.subs %}
+                <details class="side-sub">
+                  <summary class="side-sub-summary">
+                    <span class="side-sub-caret" aria-hidden="true">›</span>
+                    <span class="side-sub-name">{{ sub.name }}</span>
+                    <span class="side-sub-count">{{ sub.calcs | length }}</span>
+                  </summary>
+                  <div class="side-sub-calcs">
+                    {% for c in sub.calcs %}
+                    <a class="side-calc" href="{{ c.url }}" data-name="{{ c.name | lower }}">{{ c.name }}</a>
+                    {% endfor %}
+                  </div>
+                </details>
+                {% endfor %}
+                {% endif %}
+                {% endfor %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="side-group">
+          <div class="side-label">Explore</div>
+          <a href="/scholars" class="side-link">Minds behind Maths</a>
+          <a href="/about" class="side-link">About</a>
+          <a href="/contact" class="side-link">Contact</a>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="page">
+      {% block content %}{% endblock %}
+      {% include "_ad_slot.html" %}
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p class="disclaimer">{{ disclaimer }}</p>
+    <nav class="footer-links">
+      <a href="/about">About</a>
+      <a href="/contact">Contact</a>
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/terms">Terms of Use</a>
+    </nav>
+    <p class="copyright">© {{ current_year }} {{ site_name }} · {{ tagline }}</p>
+  </footer>
+
+  <!-- Sidebar accordion + live filter behaviour lives in sidebar.js -->
+  <script>
+  // Enable colour transitions only AFTER the first paint, so a full page load
+  // never animates from the browser default (which looked like a flicker).
+  // The theme switcher still animates because .nc-anim is on by the time a
+  // user can click it.
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){ document.body.classList.add('nc-anim'); });
+  });
+  </script>
+  <script src="/static/theme.js"></script>
+  <script src="/static/sidebar.js"></script>
+</body>
+</html>

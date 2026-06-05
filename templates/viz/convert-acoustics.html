@@ -1,0 +1,119 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Value
+      <span class="nc-field">
+        <input id="ac-val" type="number" value="80" step="any">
+        <select id="ac-from">
+          <option value="dB" selected>dB</option>
+          <option value="Bel">Bel</option>
+          <option value="Neper">Neper</option>
+          <option value="SPL (Pa)">SPL (Pa)</option>
+          <option value="Sone">Sone</option>
+        </select>
+      </span>
+    </label>
+    <label>Convert to
+      <span class="nc-field">
+        <select id="ac-to">
+          <option value="dB">dB</option>
+          <option value="Bel">Bel</option>
+          <option value="Neper">Neper</option>
+          <option value="SPL (Pa)" selected>SPL (Pa)</option>
+          <option value="Sone">Sone</option>
+        </select>
+      </span>
+    </label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="ac-chart" width="640" height="170"
+          style="margin-top:14px;width:100%;height:auto;max-width:640px"></canvas>
+  <p class="viz-caption" id="ac-cap" style="font-size:.9rem;margin-top:.5rem;opacity:.85"></p>
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="ac-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("ac-chart"), ctx = cv.getContext("2d");
+  let last = null;
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$("ac-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+  async function update(){
+    const body = { value:+$("ac-val").value, from_unit:$("ac-from").value, to_unit:$("ac-to").value };
+    let data;
+    try { const r=await fetch("/api/compute/{{ calc.slug }}",{method:"POST",
+            headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+          data=await r.json(); }
+    catch(e){ $("viz-out").textContent="compute error"; return; }
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("ac-disc").textContent = "⚠ " + data.disclaimer;
+    if (data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; ctx.clearRect(0,0,cv.width,cv.height); last=null; return; }
+    const r = data.result;
+    const shown = (Math.abs(r)>=1e6||Math.abs(r)<1e-4)? r.toExponential(4) : (Math.round(r*1e4)/1e4);
+    $("viz-out").innerHTML = `<b>${shown}</b> ${data.result_unit}`;
+    try{ if(window.__ncExplain) window.__ncExplain(data.explanation); }catch(e){}
+    last = data; draw(data);
+  }
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const W=cv.width,H=cv.height,padL=20,padR=20,trackY=H-58;
+    const DBMIN=0, DBMAX=150;
+    const x = db => padL + (Math.max(DBMIN,Math.min(DBMAX,db))-DBMIN)/(DBMAX-DBMIN)*(W-padL-padR);
+    // gradient track (quiet→loud) theme-safe
+    const grad = ctx.createLinearGradient(padL,0,W-padR,0);
+    grad.addColorStop(0,"hsl(140 55% 50%)");
+    grad.addColorStop(0.55,"hsl(45 70% 52%)");
+    grad.addColorStop(1,"hsl(8 65% 52%)");
+    ctx.fillStyle=grad; ctx.fillRect(padL,trackY-6,W-padL-padR,12);
+    // reference ticks
+    ctx.font="11px "+(NCSkin.sans||"sans-serif"); ctx.fillStyle=NCSkin.ink; ctx.strokeStyle=NCSkin.rule;
+    (d.references||[]).forEach(ref=>{
+      const xx=x(ref.db);
+      ctx.beginPath(); ctx.moveTo(xx,trackY-12); ctx.lineTo(xx,trackY+12); ctx.stroke();
+      ctx.save(); ctx.translate(xx,trackY+16); ctx.rotate(-Math.PI/9); ctx.textAlign="right";
+      ctx.fillText(`${ref.label} (${ref.db})`, 0, 6); ctx.restore();
+    });
+    // current marker
+    const xx=x(d.db);
+    ctx.beginPath(); ctx.arc(xx,trackY,9,0,2*Math.PI);
+    ctx.fillStyle=NCSkin.accent; ctx.fill();
+    ctx.fillStyle=NCSkin.ink; ctx.textAlign="center";
+    ctx.fillText(`${Math.round(d.db*10)/10} dB`, xx, trackY-16);
+    ctx.textAlign="left"; ctx.fillStyle=NCSkin.inkSoft;
+    ctx.fillText("logarithmic loudness scale (dB SPL, 0–150)", padL, 16);
+  }
+  ["ac-val","ac-from","ac-to"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last); });
+  styleFields(); update();
+})();
+</script>
+

@@ -1,0 +1,136 @@
+<link rel="stylesheet" href="/static/nclearn.css">
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Parallax angle (arcseconds)
+      <span class="nc-field"><input id="sp-p" type="number" value="0.7687" step="any" min="0.001"></span></label>
+    <label>Drag the parallax
+      <span class="nc-field"><input id="sp-range" type="range" value="0.7687" min="0.05" max="1.5" step="0.001" style="width:200px"></span></label>
+  </div>
+
+  <div class="viz-out" id="sp-out"></div>
+
+  <canvas id="sp-diagram" width="680" height="420"
+          style="display:block;width:100%;height:auto;max-width:600px;margin:10px auto 0"></canvas>
+  <p class="viz-caption" id="sp-cap" style="font-size:.85rem;text-align:center;margin-top:.4rem;opacity:.85"></p>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="sp-disc" style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const slug = "{{ calc.slug }}";
+  const P = "sp";
+  const panel = document.querySelector('.viz-panel[data-slug="'+slug+'"]');
+  let last = null;
+
+  function styleFields(){
+    if(!window.NCSkin || !panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      if(el.type==="range") return;
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  function buildBody(){
+    return { parallax_arcsec:$("sp-p").value };
+  }
+
+  async function update(){
+    const body = buildBody();
+    let data;
+    try { const r=await fetch("/api/compute/"+slug,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $(P+"-out").textContent="compute error"; return; }
+    try { if(window.NCSteps) window.NCSteps.render(data.steps||[]); } catch(e){}
+    if (data.disclaimer) $(P+"-disc").textContent="\u26a0 "+data.disclaimer;
+    if (data.error){ $(P+"-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} drawScene(null); last=null; mountLearn(null); return; }
+    $(P+"-out").innerHTML = "<b>Distance \u2248 "+data.result+" light-years</b>  \u00b7  "+fmt(data.distance_pc)+" pc";
+    try{ window.__ncExplain(data.explanation);}catch(e){}
+    last=data; drawScene(data); mountLearn(data);
+  }
+
+  function mountLearn(data){
+    if(!window.NCLearn) return;
+    NCLearn.mount({ slug:slug, panel:panel, data:data, drawFrame:(data?drawFrame:undefined) });
+  }
+  function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
+
+  function drawScene(d){ drawAt(d,1); }
+  function drawAt(d, sweep){
+    const cv=$(P+"-diagram"); if(!cv) return; const ctx=cv.getContext("2d"); const s=window.NCSkin||{};
+    const ink=s.ink||"#222", accent=s.accent||"#b5651d", yes=s.yes||"#3a7d44", soft=s.inkSoft||"#777", rule=s.rule||"#ccc";
+    const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H); const cap=$(P+"-cap");
+    if(!d){ if(cap) cap.textContent=""; return; }
+    const p=d.parallax_arcsec, d_pc=d.distance_pc, d_ly=d.distance_ly;
+    // Sun at left, Earth orbit (two positions) as a small vertical baseline, star at right.
+    const sunX=110, cy=H/2, starX=W-110;
+    // baseline visual size inversely related to parallax for intuition (bigger angle -> nearer star drawn closer)
+    const baseHalf=46;
+    const e1={x:sunX, y:cy-baseHalf}, e2={x:sunX, y:cy+baseHalf};
+    // star position: nearer for larger parallax. Map distance to x within [sunX+160, starX]
+    const t = Math.max(0, Math.min(1, (1.5 - Math.min(p,1.5))/1.45)); // small p -> t~1 (far)
+    const sx = sunX+170 + t*(starX-(sunX+170));
+    const sxs = sunX+170 + (t)*(starX-(sunX+170)); // static; sweep affects sightlines below
+    // Sun
+    ctx.fillStyle=accent; ctx.beginPath(); ctx.arc(sunX,cy,10,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=soft; ctx.font="12px "+(s.sans||"sans-serif"); ctx.textAlign="center"; ctx.fillText("Sun", sunX, cy+26);
+    // orbit baseline
+    ctx.strokeStyle=rule; ctx.lineWidth=1; ctx.beginPath(); ctx.ellipse(sunX,cy,18,baseHalf,0,0,Math.PI*2); ctx.stroke();
+    // Earth two positions
+    ctx.fillStyle=yes; ctx.beginPath(); ctx.arc(e1.x,e1.y,5,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(e2.x,e2.y,5,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=soft; ctx.textAlign="left"; ctx.fillText("Earth (Jan)", e1.x+8, e1.y-4); ctx.fillText("Earth (Jul)", e2.x+8, e2.y+12);
+    // baseline (1 AU) bracket
+    ctx.strokeStyle=accent; ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(e1.x,e1.y); ctx.lineTo(e2.x,e2.y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle=accent; ctx.save(); ctx.translate(sunX-26,cy); ctx.rotate(-Math.PI/2); ctx.textAlign="center"; ctx.fillText("1 AU baseline",0,0); ctx.restore();
+    // star
+    ctx.fillStyle=ink; ctx.beginPath();
+    for(let i=0;i<5;i++){ const ang=-Math.PI/2 + i*2*Math.PI/5; const r=(i%2===0)?8:3.5; const xx=sx+Math.cos(ang)*r, yy=cy+Math.sin(ang)*r; if(i===0)ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);} ctx.closePath(); ctx.fill();
+    ctx.fillStyle=soft; ctx.textAlign="center"; ctx.fillText("star", sx, cy-16);
+    // sight lines from the two Earth positions to the star (sweep them in)
+    const tx1=e1.x + (sx-e1.x)*sweep, ty1=e1.y + (cy-e1.y)*sweep;
+    const tx2=e2.x + (sx-e2.x)*sweep, ty2=e2.y + (cy-e2.y)*sweep;
+    ctx.strokeStyle=yes; ctx.lineWidth=1.8; ctx.beginPath(); ctx.moveTo(e1.x,e1.y); ctx.lineTo(tx1,ty1); ctx.moveTo(e2.x,e2.y); ctx.lineTo(tx2,ty2); ctx.stroke();
+    // parallax angle arc at the star
+    if(sweep>0.9){
+      ctx.strokeStyle=accent; ctx.lineWidth=2;
+      const aa=Math.atan2(e1.y-cy, e1.x-sx), bb=Math.atan2(e2.y-cy, e2.x-sx);
+      ctx.beginPath(); ctx.arc(sx,cy,24, aa, bb); ctx.stroke();
+      ctx.fillStyle=accent; ctx.font="bold 13px "+(s.mono||"monospace"); ctx.textAlign="right"; ctx.fillText(fmt(p)+"\u2033", sx-26, cy);
+    }
+    ctx.fillStyle=ink; ctx.font="bold 14px "+(s.mono||"monospace"); ctx.textAlign="left"; ctx.fillText("distance \u2248 "+fmt(d_ly)+" ly", 16, 26);
+    if(cap) cap.textContent="As Earth moves across its orbit (1 AU baseline) the star appears to shift; that tiny parallax angle gives its distance. Smaller angle = more distant star.";
+  }
+
+  function drawFrame(ctx,t,d){ if(!d) return; drawAt(d,(t<0.75? t/0.75 : 1)); }
+
+  ["sp-p"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  (function(){ const rng=$("sp-range"), num=$("sp-p"); rng.addEventListener("input",()=>{num.value=rng.value;update();}); num.addEventListener("input",()=>{const v=parseFloat(num.value);if(!isNaN(v)&&v>=0.05&&v<=1.5)rng.value=v;}); })();
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) drawScene(last); });
+  styleFields(); update();
+})();
+</script>

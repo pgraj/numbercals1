@@ -1,0 +1,120 @@
+{# TDEE stacked column: BMR base + active energy on top = total daily burn. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Sex
+      <select id="in-sex">
+        <option value="male">Male</option><option value="female">Female</option><option value="other">Other</option>
+      </select>
+    </label>
+    <label>Age<input id="in-age" type="number" value="30" step="1" min="0"></label>
+    <label>Weight
+      <span class="nc-field">
+        <input id="in-weight" type="number" value="70" step="0.5" min="0">
+        <select id="u-weight"><option value="kg">kg</option><option value="lb">lb</option></select>
+      </span>
+    </label>
+    <label>Height
+      <span class="nc-field">
+        <input id="in-height" type="number" value="175" step="0.5" min="0">
+        <select id="u-height">
+          <option value="cm">cm</option><option value="m">m</option>
+          <option value="in">in</option><option value="ft">ft + in</option>
+        </select>
+        <input id="in-height2" type="number" value="0" step="0.5" min="0"
+               style="display:none;width:5.5em" placeholder="in" title="inches">
+      </span>
+    </label>
+    <label>Activity
+      <select id="in-activity">
+        <option value="sedentary">Sedentary (1.2)</option>
+        <option value="light">Light (1.375)</option>
+        <option value="moderate">Moderate (1.55)</option>
+        <option value="active">Active (1.725)</option>
+        <option value="extra">Extra active (1.9)</option>
+      </select>
+    </label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="tdee-chart" width="640" height="340" style="margin-top:14px;width:100%;height:auto;max-width:640px"></canvas>
+  <p class="viz-caption" id="tdee-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+  <p class="viz-disclaimer" id="tdee-disc" style="font-size:.82rem;line-height:1.5;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg; el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule; el.style.borderRadius = "6px"; el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+    const disc = document.getElementById("tdee-disc");
+    if(disc){ disc.style.background = NCSkin.paper2; disc.style.color = NCSkin.inkSoft; disc.style.border = "1px solid " + NCSkin.rule; }
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("tdee-chart"), ctx = cv.getContext("2d");
+  let last = null;
+  function syncHeightUnit(){ $("in-height2").style.display = ($("u-height").value==="ft")?"":"none"; }
+
+  async function update(){
+    syncHeightUnit();
+    const body = {
+      sex:$("in-sex").value, age:+$("in-age").value,
+      weight_kg:+$("in-weight").value, weight_unit:$("u-weight").value,
+      height_cm:+$("in-height").value, height_unit:$("u-height").value, height_in2:+$("in-height2").value,
+      activity:$("in-activity").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("tdee-disc").textContent = "⚠ " + data.disclaimer;
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("tdee-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height); last=null; return;
+    }
+    $("viz-out").innerHTML = `TDEE: <b>${data.tdee}</b> kcal/day &nbsp; (BMR ${data.bmr} + active ${data.active})`;
+    $("tdee-caption").innerHTML =
+      `The lower block is your BMR — the energy to simply stay alive. The block on top is the ` +
+      `extra <b>${data.active}</b> kcal your activity adds. Stacked, they make your TDEE of ` +
+      `<b>${data.tdee}</b> kcal a day.`;
+    last = data; draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const pad=46, W=cv.width-2*pad, H=cv.height-2*pad;
+    const maxV = Math.max(d.tdee, 1);
+    const Y = v => pad + H - (v/maxV)*H;
+    const bw = 120, x = pad + (W-bw)/2;
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad,Y(0)); ctx.lineTo(pad+W,Y(0)); ctx.stroke();
+    ctx.fillStyle = NCSkin.inkSoft; ctx.fillRect(x, Y(d.bmr), bw, Y(0)-Y(d.bmr));
+    ctx.fillStyle = NCSkin.accent; ctx.fillRect(x, Y(d.tdee), bw, Y(d.bmr)-Y(d.tdee));
+    ctx.fillStyle = "#fff"; ctx.textAlign="center"; ctx.font = "12px "+(NCSkin.mono||"monospace");
+    ctx.fillText("BMR "+d.bmr, x+bw/2, (Y(d.bmr)+Y(0))/2);
+    if (Y(d.bmr)-Y(d.tdee) > 18) ctx.fillText("+ active "+d.active, x+bw/2, (Y(d.tdee)+Y(d.bmr))/2+4);
+    ctx.fillStyle = NCSkin.ink; ctx.font = "bold 14px "+(NCSkin.mono||"monospace");
+    ctx.fillText(d.tdee+" kcal", x+bw/2, Y(d.tdee)-10);
+    ctx.textAlign="left"; ctx.font="12px "+(NCSkin.mono||"monospace");
+    ctx.fillStyle=NCSkin.inkSoft; ctx.fillRect(pad,12,12,12);
+    ctx.fillStyle=NCSkin.ink; ctx.fillText("BMR (resting)", pad+18, 22);
+    ctx.fillStyle=NCSkin.accent; ctx.fillRect(pad+160,12,12,12);
+    ctx.fillStyle=NCSkin.ink; ctx.fillText("Active energy", pad+178, 22);
+  }
+
+  ["in-sex","in-age","in-weight","u-weight","in-height","u-height","in-height2","in-activity"].forEach(id=>{
+    const el=$(id); el.addEventListener("input", update); el.addEventListener("change", update);
+  });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last); });
+  styleFields(); syncHeightUnit();
+  update();
+})();
+</script>

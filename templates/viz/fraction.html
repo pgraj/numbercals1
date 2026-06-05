@@ -1,0 +1,67 @@
+{# Fraction pie with a plain-English caption. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>num 1<input id="in-num1" type="number" value="1" step="1"></label>
+    <label>den 1<input id="in-den1" type="number" value="2" step="1"></label>
+    <label>operation
+      <select id="in-op">
+        <option value="add">+</option>
+        <option value="subtract">−</option>
+        <option value="multiply">×</option>
+        <option value="divide">÷</option>
+      </select>
+    </label>
+    <label>num 2<input id="in-num2" type="number" value="1" step="1"></label>
+    <label>den 2<input id="in-den2" type="number" value="3" step="1"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="frac-chart" width="320" height="320" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="frac-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("frac-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = { num1:+$("in-num1").value, den1:+$("in-den1").value,
+                   num2:+$("in-num2").value, den2:+$("in-den2").value, op:$("in-op").value };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+    if (data.error){ $("viz-out").innerHTML = "<b>"+data.error+"</b>"; $("frac-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height); return; }
+    $("viz-out").innerHTML = `Result = <b>${data.result}</b> &nbsp;(${data.decimal})`;
+    $("frac-caption").innerHTML =
+      `As a decimal that is <b>${data.decimal}</b>. The shaded slice shows the ` +
+      `part beyond a whole number, so you can picture how much of one whole the ` +
+      `answer fills.`;
+    draw(data.series);
+  }
+
+  function draw(series){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const cx=cv.width/2, cy=cv.height/2, R=Math.min(cx,cy)-10;
+    const total=series.reduce((s,p)=>s+(p.value>0?p.value:0),0)||1;
+    const cols=[NCSkin.yes, NCSkin.paper2];
+    let ang=-Math.PI/2;
+    series.forEach((p,i)=>{
+      const slice=(Math.max(p.value,0)/total)*2*Math.PI;
+      ctx.beginPath(); ctx.moveTo(cx,cy);
+      ctx.arc(cx,cy,R,ang,ang+slice); ctx.closePath();
+      ctx.fillStyle=cols[i%cols.length]; ctx.fill();
+      ctx.strokeStyle=NCSkin.rule; ctx.stroke(); ang+=slice;
+    });
+  }
+
+  ["in-num1","in-den1","in-num2","in-den2","in-op"].forEach(id=>{
+    $(id).addEventListener("input", update);
+    $(id).addEventListener("change", update);
+  });
+  window.addEventListener("nc-theme-change", update);
+  update();
+})();
+</script>

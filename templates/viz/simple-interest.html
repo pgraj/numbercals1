@@ -1,0 +1,115 @@
+{# Simple interest stacked bar: principal (flat) + interest (linear growth).
+   Teaching point: the top of the bars rises in a straight line. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Principal<input id="in-principal" type="number" value="1000" step="100" min="0"></label>
+    <label>Rate %<input id="in-rate_pct" type="number" value="5" step="0.25" min="0"></label>
+    <label>Years<input id="in-years" type="number" value="5" step="1" min="0"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="si-chart" width="640" height="380" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="si-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg;
+      el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px";
+      el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("si-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = {
+      principal:+$("in-principal").value,
+      rate_pct:+$("in-rate_pct").value,
+      years:+$("in-years").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    if (window.NCSteps) window.NCSteps.render(data.steps || []);
+
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("si-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height);
+      return;
+    }
+    $("viz-out").innerHTML =
+      `Interest: <b>${data.interest}</b> &nbsp; Maturity value: <b>${data.amount}</b>`;
+    $("si-caption").innerHTML =
+      `The lower band is your principal — it stays the same height every year. The band ` +
+      `on top is the interest, and it grows by the same amount each year, so the tops of ` +
+      `the bars climb in a straight line. That constant step is what makes interest "simple".`;
+    draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const pad=46, W=cv.width-2*pad, H=cv.height-2*pad;
+    const pts=d.series; if(!pts||!pts.length) return;
+    const maxTotal = Math.max(...pts.map(p=>p.principal+p.interest), 1);
+    const n = pts.length;
+    const slot = W / n;
+    const bw = Math.min(slot*0.6, 60);
+    const X = i => pad + slot*i + (slot-bw)/2;
+    const Y = v => pad + H - (v/maxTotal)*H;
+
+    // baseline
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad,Y(0)); ctx.lineTo(pad+W,Y(0)); ctx.stroke();
+
+    pts.forEach((p,i)=>{
+      const x = X(i);
+      // principal band
+      ctx.fillStyle = NCSkin.inkSoft;
+      ctx.fillRect(x, Y(p.principal), bw, Y(0)-Y(p.principal));
+      // interest band on top
+      ctx.fillStyle = NCSkin.accent;
+      ctx.fillRect(x, Y(p.principal+p.interest), bw, Y(p.principal)-Y(p.principal+p.interest));
+      // year label
+      ctx.fillStyle = NCSkin.ink;
+      ctx.font = "11px "+(NCSkin.mono||"monospace");
+      ctx.textAlign = "center";
+      ctx.fillText("yr "+(p.year), x+bw/2, Y(0)+16);
+    });
+
+    // straight guide line tracing the rising tops of the bars
+    ctx.strokeStyle = NCSkin.yes; ctx.lineWidth = 1.5;
+    ctx.setLineDash([5,4]); ctx.beginPath();
+    pts.forEach((p,i)=>{
+      const cx = X(i)+bw/2, cy = Y(p.principal+p.interest);
+      i?ctx.lineTo(cx,cy):ctx.moveTo(cx,cy);
+    });
+    ctx.stroke(); ctx.setLineDash([]);
+
+    // legend
+    ctx.textAlign="left"; ctx.font="12px "+(NCSkin.mono||"monospace");
+    ctx.fillStyle=NCSkin.inkSoft; ctx.fillRect(pad,12,12,12);
+    ctx.fillStyle=NCSkin.ink; ctx.fillText("Principal", pad+18, 22);
+    ctx.fillStyle=NCSkin.accent; ctx.fillRect(pad+110,12,12,12);
+    ctx.fillStyle=NCSkin.ink; ctx.fillText("Interest", pad+128, 22);
+  }
+
+  ["in-principal","in-rate_pct","in-years"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", update);
+  styleFields();
+  update();
+})();
+</script>

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>NumberCals · registry health</title>
+  <style>
+    :root{ --ok:#2f7a52; --warn:#b8860b; --err:#b3331a; --ink:#222; --soft:#666;
+           --rule:#ddd; --paper:#fff; --paper2:#f6f5f2; --mono:ui-monospace,SFMono-Regular,Menlo,monospace; }
+    *{box-sizing:border-box}
+    body{font:14px/1.55 system-ui,sans-serif;color:var(--ink);background:var(--paper);margin:0;padding:24px;max-width:1000px}
+    h1{font-size:20px;margin:0 0 4px} .sub{color:var(--soft);margin:0 0 20px}
+    .pill{display:inline-block;padding:2px 9px;border-radius:99px;font:600 12px/1.6 var(--mono);color:#fff}
+    .pill.ok{background:var(--ok)} .pill.warn{background:var(--warn)} .pill.err{background:var(--err)}
+    .counts{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 22px}
+    .count{background:var(--paper2);border:1px solid var(--rule);border-radius:8px;padding:10px 14px;min-width:120px}
+    .count b{display:block;font:700 22px/1.2 var(--mono)} .count span{color:var(--soft);font-size:12px}
+    .check{border:1px solid var(--rule);border-radius:8px;margin:0 0 12px;overflow:hidden}
+    .check>summary{cursor:pointer;padding:10px 14px;font-weight:600;display:flex;justify-content:space-between;align-items:center;list-style:none}
+    .check>summary::-webkit-details-marker{display:none}
+    .check[data-state=ok]>summary{background:#eef6f1} .check[data-state=warn]>summary{background:#faf4e3} .check[data-state=err]>summary{background:#fbeae6}
+    .check .body{padding:6px 14px 12px;border-top:1px solid var(--rule)}
+    table{border-collapse:collapse;width:100%;font-size:13px} td,th{text-align:left;padding:5px 8px;border-bottom:1px solid var(--rule);vertical-align:top}
+    th{color:var(--soft);font-weight:600} code{font-family:var(--mono);background:var(--paper2);padding:1px 5px;border-radius:4px}
+    .none{color:var(--soft);padding:6px 0}
+    .tool{margin-top:28px;border-top:2px solid var(--rule);padding-top:18px}
+    input[type=text]{font:13px var(--mono);padding:6px 9px;border:1px solid var(--rule);border-radius:6px;width:280px;max-width:100%}
+    button{font:13px system-ui;padding:6px 12px;border:1px solid var(--rule);border-radius:6px;background:var(--paper2);cursor:pointer}
+    .rel-row{padding:4px 0;border-bottom:1px solid var(--rule)} .rel-row .sc{font:600 12px var(--mono);color:var(--ok)}
+    .tag{display:inline-block;font:11px var(--mono);background:var(--paper2);border:1px solid var(--rule);border-radius:4px;padding:0 5px;margin:0 3px 3px 0}
+  </style>
+</head>
+<body>
+  <h1>Registry health
+    {% if summary.ok and not summary.warnings_only %}<span class="pill ok">ALL OK</span>
+    {% elif summary.ok %}<span class="pill warn">WARNINGS</span>
+    {% else %}<span class="pill err">ERRORS</span>{% endif %}
+  </h1>
+  <p class="sub">Live view of what's loaded. <code>noindex</code>. Refresh after a restart to re-scan.</p>
+
+  <div class="counts">
+    <div class="count"><b>{{ summary.counts.calculators }}</b><span>calculators</span></div>
+    <div class="count"><b>{{ summary.counts.sections }}</b><span>sections</span></div>
+    <div class="count"><b>{{ summary.counts.scholars_referenced }}</b><span>scholars shown</span></div>
+    <div class="count"><b>{{ summary.counts.scholars_registered }}</b><span>scholars total</span></div>
+  </div>
+
+  {% macro check_block(key, title, rows, level, cols) %}
+  <details class="check" data-state="{{ level if rows else 'ok' }}" {% if rows %}open{% endif %}>
+    <summary><span>{{ title }}</span><span class="pill {{ level if rows else 'ok' }}">{{ rows|length }}</span></summary>
+    <div class="body">
+      {% if rows %}
+      <table>
+        <tr>{% for c in cols %}<th>{{ c }}</th>{% endfor %}</tr>
+        {% for r in rows %}
+        <tr>{% for c in cols %}<td><code>{{ r[c] }}</code></td>{% endfor %}</tr>
+        {% endfor %}
+      </table>
+      {% else %}<p class="none">None — all good.</p>{% endif %}
+    </div>
+  </details>
+  {% endmacro %}
+
+  {{ check_block("missing_viz", "Missing viz templates", summary.checks.missing_viz_templates, "err", ["slug","viz_template","expected_path"]) }}
+  {{ check_block("scholars", "Unresolved scholar links", summary.checks.unresolved_scholars, "err", ["slug","scholar"]) }}
+  {{ check_block("related", "Dead curated related links", summary.checks.dead_related_links, "err", ["slug","dead_related"]) }}
+  {{ check_block("thin", "Thin tags (weak auto-relatedness)", summary.checks.thin_tags, "warn", ["slug","tag_count","tags"]) }}
+  {{ check_block("tiles", "Placeholder section tiles", summary.checks.placeholder_section_tiles, "warn", ["slug","section"]) }}
+
+  <div class="tool">
+    <h1 style="font-size:16px">Relatedness explorer</h1>
+    <p class="sub">Type a calculator slug to see exactly why each related link is chosen.</p>
+    <input type="text" id="slug-in" placeholder="e.g. rw-tree-height" autocomplete="off">
+    <button id="go">Explain</button>
+    <div id="rel-out" style="margin-top:14px"></div>
+  </div>
+
+  <script>
+  document.getElementById("go").addEventListener("click", run);
+  document.getElementById("slug-in").addEventListener("keydown", e=>{ if(e.key==="Enter") run(); });
+  async function run(){
+    const slug = document.getElementById("slug-in").value.trim();
+    const out = document.getElementById("rel-out");
+    if(!slug){ out.innerHTML=""; return; }
+    out.textContent = "…";
+    try{
+      const r = await fetch("/debug/related/"+encodeURIComponent(slug));
+      const d = await r.json();
+      if(!d.found){ out.innerHTML = "<p class='none'>No calculator with slug <code>"+slug+"</code>.</p>"; return; }
+      let h = "<p><b>"+d.anchor_name+"</b> &middot; tags: "+(d.anchor_tags.map(t=>"<span class='tag'>"+t+"</span>").join("")||"<i>none</i>")+"</p>";
+      d.candidates.forEach(c=>{
+        const bits=[]; if(c.same_topic)bits.push("topic"); if(c.same_sub)bits.push("sub"); if(c.same_section)bits.push("section");
+        h += "<div class='rel-row'><span class='sc'>"+c.score+"</span> &nbsp;<code>"+c.slug+"</code> &nbsp;"+c.name+
+             " &nbsp;"+(c.shared_tags.map(t=>"<span class='tag'>"+t+"</span>").join(""))+
+             (bits.length?" <span style='color:#888'>(+"+bits.join(", +")+")</span>":"")+"</div>";
+      });
+      out.innerHTML = h;
+    }catch(e){ out.innerHTML = "<p class='none'>error: "+e.message+"</p>"; }
+  }
+  </script>
+</body>
+</html>

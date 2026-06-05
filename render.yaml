@@ -1,0 +1,21 @@
+# Render Blueprint for NumberCals.
+# Commit this at the repo root. Render reads it to provision the service.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: numbercals
+    runtime: python
+    plan: free                # change to 'starter' or higher when you scale
+    # Render auto-deploys on push to this branch:
+    branch: main
+    buildCommand: "pip install -r requirements.txt"
+    # $PORT is provided by Render; bind to it and to 0.0.0.0.
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # Plug-and-play kill switches / config (optional to set in dashboard):
+      - key: PIONEERS_ENABLED
+        value: "true"

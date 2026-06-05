@@ -1,0 +1,596 @@
+/* NumberCals — design tokens. Three themes keyed off <html data-theme>.
+   Everything reads these variables, so switching data-theme recolours the
+   whole site, including canvas graphs (which read them via skin.js/NCSkin). */
+:root, [data-theme="sepia"]{
+  --paper:#f7f3eb;        /* page ground            */
+  --paper-2:#f3ede0;      /* panels                 */
+  --paper-3:#fdfaf2;      /* raised cards           */
+  --ink:#1c1815;          /* primary text           */
+  --ink-soft:#7a6f60;     /* secondary text         */
+  --accent:#b34a23;       /* burnt sienna           */
+  --yes:#2f7a52;          /* green confirm          */
+  --rule:#e3d3b1;         /* hairlines              */
+}
+[data-theme="light"]{
+  --paper:#ffffff;
+  --paper-2:#f4f5f7;
+  --paper-3:#ffffff;
+  --ink:#15181c;
+  --ink-soft:#5f6b7a;
+  --accent:#b34a23;
+  --yes:#2f7a52;
+  --rule:#dfe3e8;
+}
+[data-theme="dark"]{
+  --paper:#16140f;
+  --paper-2:#201d17;
+  --paper-3:#252119;
+  --ink:#f2ece0;
+  --ink-soft:#a99e8c;
+  --accent:#e07a4e;       /* lifted sienna for contrast on dark */
+  --yes:#5fae84;
+  --rule:#3a342a;
+}
+:root{
+  --mono:'JetBrains Mono','IBM Plex Mono',ui-monospace,monospace;
+  --serif:'Crimson Pro','EB Garamond',Georgia,serif;
+  --sans:'Manrope','Inter',system-ui,sans-serif;
+  --maxw:1100px;
+  --sidebar-w:230px;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--sans);line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  transition:none; /* enabled after first paint via body.nc-anim (see below) */
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* version badge — inline in the header (no longer floating/overlapping) */
+.version-badge{
+  font-family:var(--mono);font-size:11px;color:var(--ink-soft);
+  background:var(--paper-3);border:1px solid var(--rule);
+  padding:3px 8px;border-radius:2px;white-space:nowrap;flex:0 0 auto;
+}
+
+/* header */
+.site-header{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:14px 24px;border-bottom:1px solid var(--rule);
+  position:sticky;top:0;background:var(--paper);z-index:30;
+}
+.brand{font-family:var(--mono);font-weight:700;font-size:20px;color:var(--ink)}
+.brand-slash{color:var(--accent)}
+.nav-toggle{display:none;font-size:20px;background:none;border:none;color:var(--ink);cursor:pointer}
+
+/* theme switch */
+.theme-switch{display:flex;gap:4px;margin-left:8px}
+.theme-switch button{font-size:14px;width:30px;height:30px;line-height:1;
+  background:var(--paper-3);border:1px solid var(--rule);border-radius:3px;
+  color:var(--ink-soft);cursor:pointer}
+.theme-switch button:hover{color:var(--accent);border-color:var(--accent)}
+.theme-switch button.active{background:var(--accent);color:var(--paper-3);border-color:var(--accent)}
+
+/* two-column layout: sidebar + content */
+.layout{display:flex;align-items:flex-start;max-width:var(--maxw);margin:0 auto}
+.sidebar{flex:0 0 var(--sidebar-w);width:var(--sidebar-w);padding:26px 14px 40px;
+  position:sticky;top:63px;align-self:flex-start;z-index:20}
+.side-group{margin-bottom:24px}
+.side-label{font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-soft);margin:0 8px 8px}
+.side-link{display:block;font-size:15px;padding:7px 10px;border-radius:4px;
+  color:var(--ink);margin-bottom:2px}
+.side-link:hover{background:var(--paper-2);color:var(--accent);text-decoration:none}
+
+/* layout */
+.page{flex:1;min-width:0;padding:30px 28px 60px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--accent)}
+h1{font-family:var(--serif);font-weight:700;font-size:40px;line-height:1.1;margin:.2em 0}
+h2{font-family:var(--serif);font-weight:600;font-size:26px;margin:1.4em 0 .4em}
+.lede{font-size:18px;color:var(--ink-soft);max-width:60ch}
+
+/* section grid */
+.section-grid{display:grid;gap:16px;
+  grid-template-columns:repeat(auto-fill,minmax(220px,1fr));margin-top:26px}
+.section-tile{
+  display:block;background:var(--paper-3);border:1px solid var(--rule);
+  border-radius:4px;padding:18px;transition:transform .12s,box-shadow .12s;
+}
+.section-tile:hover{transform:translateY(-2px);
+  box-shadow:0 6px 18px rgba(28,24,21,.08);text-decoration:none}
+.section-tile .glyph{font-size:24px}
+.section-tile .name{font-family:var(--mono);font-weight:600;color:var(--ink);
+  margin-top:8px;display:flex;justify-content:space-between}
+.section-tile .blurb{color:var(--ink-soft);font-size:14px;margin-top:4px}
+.count-pill{font-family:var(--mono);font-size:12px;color:var(--ink-soft)}
+
+/* calc + sub lists */
+.sub-block{margin-top:22px}
+.sub-block h3{font-family:var(--mono);font-size:14px;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-soft);border-bottom:1px solid var(--rule);
+  padding-bottom:6px}
+.calc-row{display:flex;justify-content:space-between;align-items:baseline;
+  padding:9px 0;border-bottom:1px dotted var(--rule)}
+.calc-row .formula{font-family:var(--mono);font-size:13px;color:var(--ink-soft)}
+
+/* scientific calculator */
+.calc-shell{background:var(--paper-3);border:1px solid var(--rule);
+  border-radius:6px;padding:18px;max-width:420px}
+.calc-display{font-family:var(--mono);font-size:28px;font-weight:700;text-align:right;
+  color:var(--ink);background:var(--paper-2);border:1px solid var(--rule);border-radius:3px;
+  padding:14px 12px;min-height:56px;word-break:break-all}
+.calc-mode{display:flex;gap:8px;margin:10px 0;font-family:var(--mono);font-size:12px}
+.calc-mode button{flex:0 0 auto}
+/* Fixed keypad area: scientific (6 rows) sets the height; standard fills the
+   same box so toggling modes never reflows the content below. */
+.keys{display:grid;gap:8px;margin-top:10px;min-height:312px;align-content:start}
+.keys.scientific{grid-template-columns:repeat(6,1fr)}
+.keys.standard{grid-template-columns:repeat(4,1fr)}
+.keys button{font-family:var(--mono);font-size:16px;font-weight:600;padding:12px 0;
+  background:var(--paper);border:1px solid var(--rule);border-radius:3px;
+  color:var(--ink);cursor:pointer;transition:background .1s}
+.keys button:hover{background:var(--paper-2)}
+.keys button.op{color:var(--accent);font-weight:700}
+.keys button.eq{background:var(--accent);color:var(--paper-3);border-color:var(--accent);font-weight:700}
+
+/* viz panel */
+.viz-panel{margin-top:24px;background:var(--paper-3);border:1px solid var(--rule);
+  border-radius:6px;padding:20px}
+.viz-inputs{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.viz-inputs label{font-family:var(--mono);font-size:13px;color:var(--ink-soft);
+  display:flex;flex-direction:column;gap:4px}
+.viz-inputs input{font-family:var(--mono);padding:6px 8px;width:120px;
+  border:1px solid var(--rule);border-radius:3px;background:var(--paper)}
+.viz-out{font-family:var(--mono);font-size:14px}
+.viz-out b{color:var(--accent)}
+canvas{max-width:100%;background:var(--paper-2);border:1px solid var(--rule);border-radius:3px}
+
+/* footer */
+.site-footer{border-top:1px solid var(--rule);max-width:var(--maxw);
+  margin:40px auto 0;padding:18px 20px 40px}
+.disclaimer{font-family:var(--mono);font-size:12px;color:var(--ink-soft);margin:0 0 6px}
+.copyright{font-size:12px;color:var(--ink-soft);margin:0}
+
+button{cursor:pointer}
+
+/* ad slot — sits inside the skin, never on top of it */
+.ad-slot{margin:28px 0;padding:14px;background:var(--paper-2);
+  border:1px dashed var(--rule);border-radius:4px;text-align:center}
+.ad-label{display:block;font-family:var(--mono);font-size:10px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);
+  margin-bottom:8px}
+
+/* standalone primary button (e.g. generic viz "compute") */
+button.eq{font-family:var(--mono);padding:10px 20px;border-radius:3px;
+  border:none;background:var(--accent);color:var(--paper-3)}
+button.eq:hover{filter:brightness(1.08)}
+
+/* scholar attribution on calc pages */
+.scholar-link{font-size:14px;color:var(--ink-soft);margin:6px 0 0}
+.scholar-link .count-pill{margin-left:8px}
+
+/* --- scholars A–Z directory --- */
+.az-index{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 26px}
+.az-index a{font-family:var(--mono);font-size:13px;padding:4px 9px;
+  border:1px solid var(--rule);border-radius:3px;color:var(--ink-soft)}
+.az-index a:hover{color:var(--accent);border-color:var(--accent);text-decoration:none}
+.az-chip.active{background:var(--accent);color:var(--paper-3);border-color:var(--accent)}
+.az-group{margin:22px 0}
+.az-letter{font-family:var(--mono);font-size:20px;color:var(--accent);
+  border-bottom:2px solid var(--rule);padding-bottom:4px;margin:0 0 6px}
+.az-row{display:flex;justify-content:space-between;align-items:baseline;
+  padding:10px 4px;border-bottom:1px dotted var(--rule)}
+.az-row:hover{background:var(--paper-2);text-decoration:none}
+.az-name{font-family:var(--serif);font-size:18px;color:var(--ink)}
+.az-meta{font-family:var(--mono);font-size:12px;color:var(--ink-soft)}
+.citation{font-family:var(--mono);font-size:13px;color:var(--ink-soft);margin:10px 0}
+
+/* --- calculator: stable height handled by .keys min-height (see above) --- */
+.keys{transition:opacity .12s ease}
+
+/* --- enlarged, clearer search box --- */
+.nav-search{display:flex;align-items:stretch;margin-left:auto;flex:1 1 280px;max-width:480px;min-width:220px}
+.nav-search input{flex:1;font-family:var(--mono);font-size:14px;padding:9px 12px;
+  background:var(--paper-3);border:1px solid var(--rule);border-right:none;
+  border-radius:3px 0 0 3px;color:var(--ink)}
+.nav-search input:focus{outline:none;border-color:var(--accent)}
+.nav-search button{font-size:16px;padding:0 14px;background:var(--accent);
+  color:var(--paper-3);border:1px solid var(--accent);border-radius:0 3px 3px 0;cursor:pointer}
+.nav-search button:hover{filter:brightness(1.08)}
+@media (max-width:640px){.nav-search{min-width:100%;margin-top:10px}}
+
+/* --- search results page box --- */
+.search-page-box{display:flex;gap:0;max-width:560px;margin:18px 0 26px}
+.search-page-box input{flex:1;font-family:var(--mono);font-size:16px;padding:12px 14px;
+  background:var(--paper-3);border:1px solid var(--rule);border-right:none;
+  border-radius:4px 0 0 4px;color:var(--ink)}
+.search-page-box input:focus{outline:none;border-color:var(--accent)}
+.search-page-box button{font-family:var(--mono);font-size:15px;padding:0 22px;
+  background:var(--accent);color:var(--paper-3);border:1px solid var(--accent);
+  border-radius:0 4px 4px 0;cursor:pointer}
+
+/* --- footer links --- */
+.footer-links{display:flex;flex-wrap:wrap;gap:16px;margin:10px 0}
+.footer-links a{font-family:var(--mono);font-size:13px;color:var(--ink-soft)}
+.footer-links a:hover{color:var(--accent)}
+
+/* --- contact card --- */
+.contact-card{background:var(--paper-3);border:1px solid var(--rule);
+  border-radius:6px;padding:22px;max-width:480px;margin:22px 0}
+.contact-label{font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-soft)}
+.contact-email{font-size:20px;font-weight:600;margin-top:4px}
+
+/* --- legal pages (privacy, terms) --- */
+.legal-body{max-width:70ch;margin-top:18px}
+.legal-body h2{font-family:var(--serif);font-size:20px;margin:1.6em 0 .3em}
+.legal-body p{color:var(--ink);margin:.5em 0;line-height:1.6}
+.legal-note{font-family:var(--mono);font-size:13px;color:var(--ink-soft);
+  border-top:1px solid var(--rule);padding-top:14px;margin-top:24px}
+
+/* --- sidebar responsive: collapse under a toggle on narrow screens --- */
+@media (max-width:820px){
+  .nav-toggle{display:block}
+  .layout{display:block}
+  .sidebar{position:fixed;top:0;left:0;height:100%;width:260px;z-index:40;
+    background:var(--paper-2);border-right:1px solid var(--rule);
+    transform:translateX(-100%);transition:transform .2s ease;padding-top:70px}
+  .sidebar.open{transform:translateX(0)}
+  .page{padding:24px 18px 60px}
+  .theme-switch{margin-left:auto}
+}
+.site-footer{max-width:var(--maxw);margin:40px auto 0}
+/* ===== Step-by-step working panel (append to app.css) =====================
+   Theme-aware (uses the same CSS variables as everything else, so it recolours
+   on light/sepia/dark automatically). Only appears when a calculator returns
+   steps; otherwise the partial stays hidden. */
+
+.nc-steps{margin-top:20px}
+
+.nc-steps-toggle{display:inline-flex;border:1px solid var(--rule);
+  border-radius:4px;overflow:hidden;margin-bottom:14px}
+.nc-steps-toggle button{font-family:var(--mono);font-size:13px;padding:8px 14px;
+  background:var(--paper-3);color:var(--ink-soft);border:none;cursor:pointer;
+  transition:background .12s,color .12s}
+.nc-steps-toggle button + button{border-left:1px solid var(--rule)}
+.nc-steps-toggle button:hover{color:var(--accent)}
+.nc-steps-toggle button.active{background:var(--accent);color:var(--paper-3)}
+
+.nc-steps-list{list-style:none;counter-reset:step;margin:0;padding:0;
+  background:var(--paper-3);border:1px solid var(--rule);border-radius:6px}
+.nc-steps-list li{counter-increment:step;position:relative;
+  padding:14px 18px 14px 52px;border-bottom:1px solid var(--rule)}
+.nc-steps-list li:last-child{border-bottom:none}
+.nc-steps-list li::before{content:counter(step);position:absolute;left:16px;top:14px;
+  width:24px;height:24px;line-height:24px;text-align:center;
+  font-family:var(--mono);font-size:13px;font-weight:700;
+  color:var(--paper-3);background:var(--accent);border-radius:50%}
+.nc-step-label{font-size:15px;color:var(--ink);margin-bottom:4px}
+.nc-step-math{font-family:var(--mono);font-size:15px;color:var(--ink);
+  margin:4px 0;overflow-x:auto}
+.nc-step-note{font-size:13px;color:var(--ink-soft);margin-top:4px}
+
+/* ===== Clear toggle "active" state, shared by all toggles (append to app.css) ==
+
+   The problem this fixes: previously the active mode button only changed text
+   colour (via .op), which looked identical to operator buttons — so you could
+   not tell which mode was selected. These rules give every toggle a strong,
+   consistent "selected" look: the ACTIVE button is filled with the accent
+   colour; the inactive one is plain. Applies to:
+     - standard / scientific  (.nc-seg buttons in .calc-mode)
+     - DEG / RAD              (.nc-seg buttons)
+     - the existing steps toggle already uses .nc-steps-toggle .active
+       (filled accent) — this just keeps it consistent. */
+
+.calc-mode .nc-seg{
+  font-family:var(--mono);font-size:12px;padding:6px 12px;border-radius:3px;
+  background:var(--paper);border:1px solid var(--rule);color:var(--ink-soft);
+  cursor:pointer;transition:background .12s,color .12s,border-color .12s}
+.calc-mode .nc-seg:hover{border-color:var(--accent);color:var(--accent)}
+.calc-mode .nc-seg.active{
+  background:var(--accent);color:var(--paper-3);border-color:var(--accent);
+  font-weight:700}
+
+/* small plain-English status line under the toggles */
+.calc-status{font-family:var(--mono);font-size:12px;color:var(--ink-soft);
+  margin:4px 0 6px;letter-spacing:.02em}
+.calc-status::before{content:"▸ ";color:var(--accent)}
+
+/* ===== Sidebar accordion + live filter (append to app.css) ================
+   In-rail accordion that scales to 34+ calculators per section without
+   clutter. One section expands at a time; within it each sub-group is a
+   collapsible <details> (collapsed by default). A live filter box at the top
+   narrows the whole tree by calculator name. Identical on desktop and mobile —
+   no flyout geometry to break. All colours from theme tokens. */
+
+/* --- filter box --- */
+.side-filter{display:flex;align-items:stretch;margin:0 4px 12px;position:relative}
+.side-filter input{
+  flex:1;min-width:0;font-family:var(--mono);font-size:13px;
+  padding:8px 28px 8px 10px;color:var(--ink);
+  background:var(--paper-3);border:1px solid var(--rule);border-radius:4px}
+.side-filter input:focus{outline:none;border-color:var(--accent)}
+.side-filter input::placeholder{color:var(--ink-soft)}
+.side-filter-clear{
+  position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  width:20px;height:20px;line-height:18px;text-align:center;
+  font-size:16px;color:var(--ink-soft);
+  background:none;border:none;border-radius:3px;cursor:pointer}
+.side-filter-clear:hover{color:var(--accent)}
+.side-filter-empty{
+  font-family:var(--mono);font-size:12px;color:var(--ink-soft);
+  margin:-6px 6px 12px}
+
+/* --- accordion: section level --- */
+.side-section{margin-bottom:2px}
+.side-section-row{display:flex;align-items:stretch;gap:0}
+/* caret button: toggles the tree, no navigation */
+.side-section-caret-btn{
+  flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  width:26px;padding:7px 2px;border-radius:4px 0 0 4px;
+  background:none;border:none;color:var(--ink-soft);cursor:pointer}
+.side-section-caret-btn:hover{background:var(--paper-2);color:var(--accent)}
+/* section name: a real link to the master /section page */
+.side-section-link{
+  flex:1;min-width:0;display:flex;align-items:center;gap:8px;
+  font-family:var(--sans);font-size:15px;
+  padding:7px 8px 7px 4px;border-radius:0;color:var(--ink);text-decoration:none}
+.side-section-link:hover{background:var(--paper-2);color:var(--accent);text-decoration:none}
+.side-section-name{flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-section-link .count-pill{flex:0 0 auto}
+.side-caret{flex:0 0 auto;color:var(--ink-soft);
+  transition:transform .15s ease;font-size:13px}
+.side-section.open .side-section-link{background:var(--paper-2);color:var(--accent)}
+.side-section.open .side-section-caret-btn{background:var(--paper-2);color:var(--accent)}
+.side-section.open .side-caret{transform:rotate(90deg);color:var(--accent)}
+/* the small "open section page" arrow at the row end */
+.side-section-all{
+  flex:0 0 auto;display:flex;align-items:center;padding:0 8px;
+  font-size:13px;color:var(--ink-soft);border-radius:0 4px 4px 0}
+.side-section-all:hover{color:var(--accent);background:var(--paper-2);text-decoration:none}
+
+/* section body: collapsed by default, revealed when the section is open */
+.side-section-body{display:none;padding:2px 0 6px 6px;
+  border-left:2px solid var(--rule);margin:2px 0 6px 12px}
+.side-section.open > .side-section-body{display:block}
+
+/* --- accordion: sub-group level (native <details>) --- */
+.side-sub{margin:0 0 1px}
+.side-sub-summary{
+  display:flex;align-items:center;gap:6px;cursor:pointer;list-style:none;
+  font-family:var(--mono);font-size:12px;letter-spacing:.03em;
+  color:var(--ink-soft);padding:6px 8px;border-radius:4px}
+.side-sub-summary::-webkit-details-marker{display:none}  /* hide native triangle */
+.side-sub-summary:hover{color:var(--accent);background:var(--paper-2)}
+.side-sub-caret{flex:0 0 auto;transition:transform .15s ease;font-size:11px}
+.side-sub[open] > .side-sub-summary .side-sub-caret{transform:rotate(90deg)}
+.side-sub[open] > .side-sub-summary{color:var(--accent)}
+.side-sub-name{flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase}
+.side-sub-count{flex:0 0 auto;font-size:11px;color:var(--ink-soft)}
+
+/* the calculator links themselves */
+.side-sub-calcs{display:flex;flex-direction:column;padding:2px 0 6px 16px}
+.side-calc{
+  display:block;font-size:14px;line-height:1.3;padding:6px 8px;
+  border-radius:4px;color:var(--ink);text-decoration:none}
+.side-calc:hover{background:var(--paper-2);color:var(--accent);text-decoration:none}
+.side-calc.is-current{color:var(--accent);font-weight:600;
+  background:var(--paper-2);box-shadow:inset 2px 0 0 var(--accent)}
+
+/* ===== Home page editorial intro (append to app.css) ===================== */
+.home-intro{max-width:68ch;margin:30px 0 8px}
+.home-intro p{font-size:17px;color:var(--ink);line-height:1.7;margin:0 0 16px}
+.home-intro h2{margin-top:1.1em}
+.home-intro em{font-style:italic;color:var(--ink)}
+
+/* ============================================================
+   NumberCals — Health batch additions (append to app.css)
+   ============================================================ */
+
+/* Unit pick-list grouping: a value input sitting next to its unit <select>
+   (and an optional second input for ft+in). Keeps them on one line and tidy. */
+.nc-field{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+}
+.nc-field input[type="number"]{
+  width:7em;
+}
+.nc-field select{
+  min-width:4.5em;
+}
+
+/* Per-result disclaimer shown under each health calculator's output.
+   Colours are set inline from the active skin in JS; this just handles layout. */
+.viz-disclaimer{
+  display:block;
+}
+.viz-disclaimer:empty{
+  display:none;          /* no stray box before the first compute */
+}
+
+/* Sidebar Home link + the two calculator shortcuts in the top group.
+   They reuse .side-link; this only adds a touch of separation. */
+.side-home-link{
+  letter-spacing:.01em;
+}
+.side-nav .side-group:first-child{
+  margin-bottom:.5rem;
+  padding-bottom:.5rem;
+  border-bottom:1px solid var(--rule);
+}
+/* ============================================================
+   NumberCals — navigation polish (append to app.css)
+   Fixes: (1) left-panel shifting between pages, (2) page flicker
+   ============================================================ */
+
+/* (1) Reserve the vertical scrollbar's space at all times.
+   Short pages (e.g. Accounting) have no scrollbar; tall pages do. That
+   appearing/disappearing scrollbar changes the viewport width by ~15px and
+   shifts the centred layout left/right between pages. Reserving the gutter
+   keeps every page the exact same width, so the sidebar never moves. */
+html{
+  scrollbar-gutter: stable;
+  overflow-y: scroll;          /* fallback for browsers without scrollbar-gutter */
+}
+
+/* (2) Kill the cross-navigation flash.
+   The base body{} rule above now starts with transition:none so a full page
+   load never animates the background from the browser default (which read as a
+   flicker). The theme switcher re-enables the fade at runtime: base.html adds
+   the .nc-anim class to <body> after the first paint. */
+body.nc-anim{
+  transition: background .2s ease, color .2s ease;
+}
+
+
+/* ============================================================
+   NumberCals — Conversions input/result font sizes (append to app.css)
+   ============================================================ */
+/* ---- (2) Larger, clearer converter inputs & result -------------------- */
+/* These target the viz panel used by every converter. Bumped sizes make
+   the value you type and the answer easy to read on phone and desktop. */
+.viz-inputs label{
+  font-size:15px;            /* was 13px */
+}
+.viz-inputs input,
+.viz-inputs select,
+.nc-field input[type="number"],
+.nc-field select{
+  font-family:var(--mono);
+  font-size:17px;            /* was unset/inherited small */
+  padding:9px 11px;
+  line-height:1.3;
+}
+.nc-field input[type="number"]{ width:8.5em; }
+.nc-field select{ min-width:6em; }
+
+/* The headline result line ("Result: 212 °F" etc.) */
+.viz-out{
+  font-size:20px;            /* was 14px */
+  line-height:1.4;
+  margin-top:4px;
+}
+.viz-out b{ font-size:1.15em; }   /* the number itself, a touch larger */
+
+/* Text inputs (e.g. clothing-size) match the number inputs. */
+.viz-inputs input[type="text"]{
+  font-family:var(--mono);
+  font-size:17px;
+  padding:9px 11px;
+}
+
+/* On small screens let fields grow to full width so they're tappable. */
+@media (max-width:520px){
+  .viz-inputs{ gap:12px; }
+  .viz-inputs label{ flex:1 1 100%; }
+  .nc-field{ width:100%; }
+  .nc-field input[type="number"],
+  .viz-inputs input[type="text"]{ flex:1 1 auto; width:auto; }
+}
+
+/* ============================================================
+   NumberCals — sidebar accordion: mobile drawer parity
+   The accordion is identical on desktop and mobile; inside the slide-in
+   drawer (<=820px, handled by theme.js toggling .sidebar.open) the same
+   markup just gets a touch more vertical breathing room.
+   ============================================================ */
+@media (max-width:820px){
+  .side-section-link{padding:10px 8px 10px 4px;font-size:16px}
+  .side-section-caret-btn{padding:10px 2px}
+  .side-calc{padding:9px 8px;font-size:15px}
+  .side-sub-summary{padding:8px}
+  .side-filter input{font-size:14px;padding:10px 28px 10px 12px}
+}
+
+/* ============================================================
+   NumberCals — section page: collapsible sub-blocks (parity w/ sidebar)
+   Open by default (a landing page shows its content); click the heading
+   to collapse. Reuses the existing .sub-block h3 styling.
+   ============================================================ */
+.sub-block-collapsible > summary{list-style:none;cursor:pointer}
+.sub-block-collapsible > summary::-webkit-details-marker{display:none}
+.sub-block-collapsible > summary h3{margin:0;display:flex;align-items:center;gap:10px}
+.sub-block-collapsible > summary h3::before{
+  content:"›";color:var(--accent);font-family:var(--mono);
+  transition:transform .15s ease;display:inline-block}
+.sub-block-collapsible[open] > summary h3::before{transform:rotate(90deg)}
+.sub-block-collapsible .sub-count{
+  font-family:var(--mono);font-size:12px;color:var(--ink-soft);
+  text-transform:none;letter-spacing:0}
+
+/* ============================================================
+   NumberCals — sidebar TOPIC level (Section › Topic › Cluster)
+   The outer collapsible inside a section. Sits between the section
+   body and the .side-sub clusters. Theme tokens only.
+   ============================================================ */
+.side-topic{margin:0 0 2px}
+.side-topic-summary{
+  display:flex;align-items:center;gap:6px;cursor:pointer;list-style:none;
+  font-family:var(--sans);font-size:14px;font-weight:600;
+  color:var(--ink);padding:7px 8px;border-radius:4px}
+.side-topic-summary::-webkit-details-marker{display:none}
+.side-topic-summary:hover{color:var(--accent);background:var(--paper-2)}
+.side-topic-caret{flex:0 0 auto;transition:transform .15s ease;font-size:12px;color:var(--ink-soft)}
+.side-topic[open] > .side-topic-summary .side-topic-caret{transform:rotate(90deg);color:var(--accent)}
+.side-topic[open] > .side-topic-summary{color:var(--accent)}
+.side-topic-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-topic-body{padding:2px 0 4px 10px;border-left:1px solid var(--rule);margin:2px 0 4px 10px}
+
+/* section page topic heading */
+.topic-heading{font-family:var(--serif);font-size:22px;color:var(--ink);
+  margin:1.6em 0 .2em;padding-bottom:4px;border-bottom:2px solid var(--rule)}
+
+/* ===== NC-RELATED RAIL (Stage-3 wiring, appended block — do not interleave) =====
+   Styles the zero-touch "Related calculators" nav rendered by calc.html.
+   Token-only colours (the single source of truth is the :root / [data-theme]
+   blocks at the top of this file) so the rail follows sepia/light/dark with
+   no hard-coded hex anywhere in this block. */
+.nc-related{
+  margin-top:2.5rem;
+  padding-top:1.25rem;
+  border-top:1px solid var(--rule);
+}
+.nc-related h2{
+  font-family:var(--serif);
+  font-size:1.15rem;
+  margin:0 0 .85rem;
+}
+.nc-related-list{
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:flex;
+  flex-wrap:wrap;
+  gap:.6rem;
+}
+.nc-related-item{
+  margin:0;
+}
+.nc-related-item a{
+  display:inline-block;
+  padding:.45rem .8rem;
+  background:var(--paper-2);
+  border:1px solid var(--rule);
+  border-radius:8px;
+  color:var(--ink);
+  font-size:.92rem;
+  line-height:1.2;
+  transition:border-color .15s ease, color .15s ease;
+}
+.nc-related-item a:hover{
+  border-color:var(--accent);
+  color:var(--accent);
+  text-decoration:none;
+}
+@media (prefers-reduced-motion: reduce){
+  .nc-related-item a{transition:none}
+}
+/* ===== END NC-RELATED RAIL ===== */

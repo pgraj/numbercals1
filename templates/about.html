@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}About · {{ site_name }}{% endblock %}
+{% block description %}About {{ site_name }} — a free collection of mathematical tools with transparent, well-documented formulas.{% endblock %}
+{% block content %}
+<p class="eyebrow">// about</p>
+<h1>About {{ site_name }}</h1>
+<p class="lede">{{ site_name }} is a free collection of mathematical tools
+  designed to support everyday calculations across areas such as finance,
+  health, business, engineering, and general problem-solving. Each calculator
+  is based on well-established formulas, with clear explanations of the
+  methodology and sources provided on every page.</p>
+
+<div class="legal-body">
+  <h2>What We Offer</h2>
+  <p>The platform currently includes
+    <strong style="color:var(--accent)">{{ calc_count }}</strong>
+    interactive calculator{{ "" if calc_count == 1 else "s" }}. Each tool
+    operates independently: simply select the calculator you need, input your
+    values, and receive instant results.</p>
+
+  <h2>How It's Built</h2>
+  <p>Every calculator is a self-contained Python module that declares which
+    subject and sub-section it belongs to, supported by carefully verified
+    reference values and automated testing. The home page, section pages, search
+    index, and this count all read from one registry. All formulas are
+    transparent and fully documented. We do not track or store user inputs; all
+    calculations are performed in real time and remain private.</p>
+
+  <h2>Limitations and Disclaimer</h2>
+  <p>{{ site_name }} is intended primarily as a learning and demonstration
+    platform, developed to explore Python, FastAPI, and JavaScript-based
+    computation tools such as Math.js. While we strive for accuracy, errors in
+    formulas or system behaviour may occur due to technical limitations or
+    unforeseen issues. The results provided should be used as general guidance
+    only, and we do not guarantee their accuracy.</p>
+
+  <h2>A Note on Accuracy</h2>
+  <p>Calculations are performed using the formulas described on each page and
+    aim to provide reliable results based on the inputs given. However, outputs
+    are estimates and should not be relied upon as financial, medical, legal, or
+    tax advice. For decisions involving significant impact, please consult a
+    qualified professional.</p>
+
+  <h2>Contact</h2>
+  <p>If you have questions, suggestions for new calculators, or would like to
+    report an issue, please reach out via the <a href="/contact">contact page</a>.</p>
+</div>
+{% endblock %}

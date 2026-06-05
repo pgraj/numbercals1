@@ -1,0 +1,156 @@
+<link rel="stylesheet" href="/static/nclearn.css">
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Angle x (degrees)
+      <span class="nc-field"><input id="sg-deg" type="number" value="30" step="any"></span>
+    </label>
+    <label>Drag
+      <span class="nc-field"><input id="sg-range" type="range" value="30" min="0" max="360" step="1" style="width:200px"></span>
+    </label>
+  </div>
+
+  <div class="viz-out" id="sg-out"></div>
+
+  <canvas id="sg-diagram" width="680" height="320"
+          style="display:block;width:100%;height:auto;max-width:660px;margin:10px auto 0"></canvas>
+  <p class="viz-caption" id="sg-cap" style="font-size:.85rem;text-align:center;margin-top:.4rem;opacity:.85"></p>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="sg-disc" style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const slug = "{{ calc.slug }}";
+  const panel = document.querySelector('.viz-panel[data-slug="'+slug+'"]');
+  let last = null;
+
+  function styleFields(){
+    if(!window.NCSkin || !panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      if(el.type==="range") return;
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$("sg-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  async function update(){
+    const body = { angle_deg: $("sg-deg").value };
+    let data;
+    try { const r=await fetch("/api/compute/"+slug,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $("sg-out").textContent="compute error"; return; }
+    try { if(window.NCSteps) window.NCSteps.render(data.steps||[]); } catch(e){}
+    if (data.disclaimer) $("sg-disc").textContent="\u26a0 "+data.disclaimer;
+    if (data.error){ $("sg-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} drawAt(null,0); last=null; mountLearn(null); return; }
+    $("sg-out").innerHTML="<b>sin "+fmt(data.x)+"° = "+data.result+"</b>";
+    try{ window.__ncExplain(data.explanation);}catch(e){}
+    last=data; drawAt(data, data.x); mountLearn(data);
+  }
+
+  function mountLearn(data){
+    if(!window.NCLearn) return;
+    NCLearn.mount({ slug:slug, panel:panel, data:data, drawFrame:(data?drawFrame:undefined) });
+  }
+
+  // Layout: unit circle on the left, sine axes on the right; a dashed link line
+  // ties the circle point's height to the curve point at the same angle.
+  function drawAt(d, angDeg){
+    const cv=$("sg-diagram"); if(!cv) return;
+    const ctx=cv.getContext("2d"); const s=window.NCSkin||{};
+    const ink=s.ink||"#222", accent=s.accent||"#b5651d", yes=s.yes||"#3a7d44",
+          soft=s.inkSoft||"#777", rule=s.rule||"#ccc", paper2=s.paper2||"#eee";
+    const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H);
+    const cy=H/2, R=110;
+    const ccx=130;                    // circle centre x
+    const gx0=300, gx1=W-20;          // graph x-range
+    const gw=gx1-gx0;
+    // circle
+    ctx.strokeStyle=rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(ccx-R-15,cy); ctx.lineTo(ccx+R+15,cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ccx,cy-R-15); ctx.lineTo(ccx,cy+R+15); ctx.stroke();
+    ctx.strokeStyle=soft; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(ccx,cy,R,0,Math.PI*2); ctx.stroke();
+    // graph axes + light grid
+    ctx.strokeStyle=rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(gx0,cy); ctx.lineTo(gx1,cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(gx0,cy-R-15); ctx.lineTo(gx0,cy+R+15); ctx.stroke();
+    ctx.strokeStyle=paper2; ctx.lineWidth=1;
+    for(let a=90;a<=360;a+=90){ const gx=gx0+(a/360)*gw; ctx.beginPath(); ctx.moveTo(gx,cy-R-12); ctx.lineTo(gx,cy+R+12); ctx.stroke(); }
+    ctx.fillStyle=soft; ctx.font="10px "+(s.sans||"sans-serif"); ctx.textAlign="center";
+    [0,90,180,270,360].forEach(a=>{ const gx=gx0+(a/360)*gw; ctx.fillText(a+"°", gx, cy+R+28); });
+    const cap=$("sg-cap");
+    if(!d){ if(cap) cap.textContent=""; return; }
+
+    // full sine curve up to angDeg
+    ctx.strokeStyle=accent; ctx.lineWidth=2; ctx.beginPath();
+    for(let a=0;a<=angDeg;a+=2){
+      const gx=gx0+(a/360)*gw, gy=cy-Math.sin(a*Math.PI/180)*R;
+      if(a===0) ctx.moveTo(gx,gy); else ctx.lineTo(gx,gy);
+    }
+    ctx.stroke();
+    // faint remainder of the curve
+    ctx.strokeStyle=rule; ctx.lineWidth=1; ctx.beginPath();
+    for(let a=angDeg;a<=360;a+=2){
+      const gx=gx0+(a/360)*gw, gy=cy-Math.sin(a*Math.PI/180)*R;
+      if(a===angDeg) ctx.moveTo(gx,gy); else ctx.lineTo(gx,gy);
+    }
+    ctx.stroke();
+
+    // circle point + radius + vertical sin leg
+    const th=angDeg*Math.PI/180;
+    const px=ccx+Math.cos(th)*R, py=cy-Math.sin(th)*R;
+    ctx.strokeStyle=ink; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(ccx,cy); ctx.lineTo(px,py); ctx.stroke();
+    ctx.strokeStyle=yes; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(px,cy); ctx.lineTo(px,py); ctx.stroke();
+    ctx.fillStyle=accent; ctx.beginPath(); ctx.arc(px,py,5,0,Math.PI*2); ctx.fill();
+
+    // curve point at angDeg + dashed link from circle height to curve point
+    const cgx=gx0+(angDeg/360)*gw, cgy=cy-Math.sin(th)*R;
+    ctx.setLineDash([4,4]); ctx.strokeStyle=yes; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(cgx,cgy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=accent; ctx.beginPath(); ctx.arc(cgx,cgy,5,0,Math.PI*2); ctx.fill();
+
+    // labels
+    ctx.fillStyle=yes; ctx.font="12px "+(s.sans||"sans-serif"); ctx.textAlign="left";
+    ctx.fillText("sin = "+fmt(d.y), px+8, (cy+py)/2);
+    ctx.fillStyle=ink; ctx.font="bold 13px "+(s.mono||"monospace"); ctx.textAlign="left";
+    ctx.fillText("x="+fmt(angDeg)+"°,  y="+fmt(d.y), gx0+6, cy-R-2);
+    if(cap) cap.textContent="The point's height on the circle (green) is its sine — drag or play to trace the wave.";
+  }
+
+  function drawFrame(ctx, t, d){ if(!d) return; drawAt(d, t*360); }
+
+  function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
+
+  function syncDeg(){ const v=Math.max(0,Math.min(360,Math.round(+$("sg-deg").value||0))); $("sg-range").value=v; }
+  function syncRange(){ $("sg-deg").value=$("sg-range").value; }
+
+  $("sg-deg").addEventListener("input", ()=>{ syncDeg(); update(); });
+  $("sg-range").addEventListener("input", ()=>{ syncRange(); update(); });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) drawAt(last, last.x); });
+  styleFields(); syncDeg(); update();
+})();
+</script>

@@ -1,0 +1,9 @@
+{# Generic interactive viz: builds inputs from the calc's compute() signature,
+   POSTs to /api/compute/<slug>, renders the result. Custom calcs override this
+   by declaring viz_template= in their @register. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs" id="viz-inputs"></div>
+  <button class="eq" id="viz-run">compute</button>
+  <div class="viz-out" id="viz-out" style="margin-top:14px"></div>
+</div>
+<script src="/static/viz-generic.js"></script>

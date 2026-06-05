@@ -1,0 +1,53 @@
+{# Percentage pie with a plain-English caption. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Percent (%)<input id="in-percent" type="number" value="15" step="1"></label>
+    <label>of (whole)<input id="in-whole" type="number" value="200" step="10"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="pct-chart" width="320" height="320" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="pct-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("pct-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = { whole:+$("in-whole").value, percent:+$("in-percent").value };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+    if (data.error){ $("viz-out").innerHTML = "<b>"+data.error+"</b>"; ctx.clearRect(0,0,cv.width,cv.height); return; }
+    const p=$("in-percent").value, w=$("in-whole").value;
+    $("viz-out").innerHTML = `${p}% of ${w} = <b>${data.part}</b>`;
+    $("pct-caption").innerHTML =
+      `The shaded slice is <b>${data.part}</b> out of <b>${w}</b>. ` +
+      `It fills ${p}% of the circle — the bigger the percentage, the bigger the slice.`;
+    draw(data.series);
+  }
+
+  function draw(series){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const cx=cv.width/2, cy=cv.height/2, R=Math.min(cx,cy)-10;
+    const total=series.reduce((s,p)=>s+(p.value>0?p.value:0),0)||1;
+    const cols=[NCSkin.accent, NCSkin.paper2];
+    let ang=-Math.PI/2;
+    series.forEach((p,i)=>{
+      const slice=(Math.max(p.value,0)/total)*2*Math.PI;
+      ctx.beginPath(); ctx.moveTo(cx,cy);
+      ctx.arc(cx,cy,R,ang,ang+slice); ctx.closePath();
+      ctx.fillStyle=cols[i%cols.length]; ctx.fill();
+      ctx.strokeStyle=NCSkin.rule; ctx.stroke(); ang+=slice;
+    });
+  }
+
+  ["in-whole","in-percent"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", update);
+  update();
+})();
+</script>

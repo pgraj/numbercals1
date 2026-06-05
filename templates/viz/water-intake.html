@@ -1,0 +1,119 @@
+{# Water intake: a cylinder that fills blue to the calculated daily target. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Weight
+      <span class="nc-field">
+        <input id="in-weight" type="number" value="70" step="0.5" min="0">
+        <select id="u-weight"><option value="kg">kg</option><option value="lb">lb</option></select>
+      </span>
+    </label>
+    <label>Exercise (min/day)<input id="in-exercise_min" type="number" value="30" step="5" min="0"></label>
+    <label>Climate / season
+      <select id="in-climate">
+        <option value="spring">Spring</option>
+        <option value="summer">Summer</option>
+        <option value="autumn">Autumn</option>
+        <option value="winter">Winter</option>
+        <option value="hot_humid">Hot / humid</option>
+        <option value="dry_arid">Dry / arid</option>
+      </select>
+    </label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="water-chart" width="640" height="320" style="margin-top:14px;width:100%;height:auto;max-width:640px"></canvas>
+  <p class="viz-caption" id="water-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+  <p class="viz-disclaimer" id="water-disc" style="font-size:.82rem;line-height:1.5;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg; el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule; el.style.borderRadius = "6px"; el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+    const disc = document.getElementById("water-disc");
+    if(disc){ disc.style.background = NCSkin.paper2; disc.style.color = NCSkin.inkSoft; disc.style.border = "1px solid " + NCSkin.rule; }
+  }
+  const WATER = "hsl(205 65% 52%)";
+  const $ = id => document.getElementById(id);
+  const cv = $("water-chart"), ctx = cv.getContext("2d");
+  let last = null;
+  const FULL = 4.0;
+
+  async function update(){
+    const body = {
+      weight_kg:+$("in-weight").value, weight_unit:$("u-weight").value,
+      exercise_min:+$("in-exercise_min").value, climate:$("in-climate").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("water-disc").textContent = "⚠ " + data.disclaimer;
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("water-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height); last=null; return;
+    }
+    $("viz-out").innerHTML =
+      `Daily target: <b>${data.litres} L</b> &nbsp; (~${data.ounces} fl oz · about ${data.glasses} glasses)`;
+    $("water-caption").innerHTML =
+      `The cylinder fills to your target of <b>${data.litres} litres</b>. Remember a good share of ` +
+      `daily fluid also comes from food and other drinks, so this is total fluid, not water alone.`;
+    last = data; draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const cx=cv.width/2, topY=30, botY=cv.height-40, w=120;
+    const x0 = cx-w/2, h = botY-topY, ry = 14;
+    const frac = Math.max(0, Math.min(1, d.litres / FULL));
+    const fillTop = botY - frac*h;
+
+    // Water fill FIRST (so the glass outline draws cleanly on top).
+    // No canvas clip — a plain rect body + surface/bottom ellipses is robust
+    // across browsers, where a compound-arc clip region sometimes renders empty.
+    if (frac > 0){
+      ctx.fillStyle = WATER;
+      // body of the water
+      ctx.fillRect(x0, fillTop, w, botY - fillTop);
+      // rounded bottom
+      ctx.beginPath(); ctx.ellipse(cx, botY, w/2, ry, 0, 0, 2*Math.PI); ctx.fill();
+      // surface ellipse (slightly lighter so it reads as a top surface)
+      ctx.fillStyle = "hsl(205 70% 62%)";
+      ctx.beginPath(); ctx.ellipse(cx, fillTop, w/2, ry, 0, 0, 2*Math.PI); ctx.fill();
+    }
+
+    // Glass outline ON TOP of the water.
+    ctx.strokeStyle = NCSkin.rule; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, topY); ctx.lineTo(x0, botY);
+    ctx.ellipse(cx, botY, w/2, ry, 0, Math.PI, 0, true); ctx.lineTo(x0+w, topY); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(cx, topY, w/2, ry, 0, 0, 2*Math.PI); ctx.stroke();
+
+    ctx.fillStyle = "#fff"; ctx.textAlign="center"; ctx.font="bold 20px "+(NCSkin.mono||"monospace");
+    if (frac > 0.12) ctx.fillText(d.litres+" L", cx, (fillTop+botY)/2);
+    ctx.fillStyle = NCSkin.inkSoft; ctx.font="11px "+(NCSkin.mono||"monospace"); ctx.textAlign="left";
+    for (let l=1; l<=FULL; l++){
+      const y = botY - (l/FULL)*h;
+      ctx.strokeStyle = NCSkin.rule; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(x0+w+6, y); ctx.lineTo(x0+w+14, y); ctx.stroke();
+      ctx.fillText(l+" L", x0+w+18, y+4);
+    }
+  }
+
+  ["in-weight","u-weight","in-exercise_min","in-climate"].forEach(id=>{
+    const el=$(id); el.addEventListener("input", update); el.addEventListener("change", update);
+  });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last); });
+  styleFields();
+  update();
+})();
+</script>

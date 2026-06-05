@@ -1,0 +1,80 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Value
+      <span class="nc-field">
+        <input id="cv-val" type="number" value="1" step="any">
+        <select id="cv-from"><option value="L">L</option><option value="mL">mL</option><option value="US gal" selected>US gal</option><option value="US qt">US qt</option><option value="US pt">US pt</option><option value="US cup">US cup</option><option value="fl oz">fl oz</option><option value="tbsp">tbsp</option><option value="tsp">tsp</option><option value="in\u00b3">in³</option><option value="ft\u00b3">ft³</option></select>
+      </span>
+    </label>
+    <label>Convert to
+      <span class="nc-field">
+        <select id="cv-to"><option value="L" selected>L</option><option value="mL">mL</option><option value="US gal">US gal</option><option value="US qt">US qt</option><option value="US pt">US pt</option><option value="US cup">US cup</option><option value="fl oz">fl oz</option><option value="tbsp">tbsp</option><option value="tsp">tsp</option><option value="in\u00b3">in³</option><option value="ft\u00b3">ft³</option></select>
+      </span>
+    </label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <div class="viz-explain" id="cv-explain" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="cv-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$("cv-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+    styleExplain();
+  }
+  function styleExplain(){
+    const box=$("cv-explain"); if(!box) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{
+      c.style.background=NCSkin.paper2; c.style.border="1px solid "+NCSkin.rule;
+      c.style.borderRadius="8px"; c.style.padding="12px 14px"; c.style.marginBottom="10px";
+    });
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{
+      h.style.color=NCSkin.accent; h.style.fontFamily=NCSkin.mono||"monospace";
+      h.style.fontSize="14px"; h.style.margin="0 0 6px"; h.style.fontWeight="600";
+    });
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{
+      p.style.color=NCSkin.ink; p.style.fontSize="14.5px"; p.style.lineHeight="1.55"; p.style.margin="0";
+    });
+  }
+  function renderExplain(items){
+    const box=$("cv-explain"); if(!box) return;
+    if(!items || !items.length){ box.innerHTML=""; return; }
+    box.innerHTML = items.map(it=>
+      `<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div>`+
+      `<p class="nc-explain-p">${it.body}</p></div>`).join("");
+    styleExplain();
+  }
+  function fmt(x){
+    if(x===0) return "0"; const a=Math.abs(x);
+    if(a>=1e6||a<1e-4) return x.toExponential(4);
+    return (Math.round(x*1e6)/1e6).toString();
+  }
+  let explained=false;
+  async function update(){
+    const body = { value:+$("cv-val").value, from_unit:$("cv-from").value, to_unit:$("cv-to").value };
+    let data;
+    try { const r=await fetch("/api/compute/{{ calc.slug }}",{method:"POST",
+            headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+          data=await r.json(); }
+    catch(e){ $("viz-out").textContent="compute error"; return; }
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("cv-disc").textContent = "⚠ " + data.disclaimer;
+    if (data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; return; }
+    $("viz-out").innerHTML = `<b>${fmt(data.result)}</b> ${data.result_unit||""}`;
+    if(!explained){ renderExplain(data.explanation); explained=true; }
+  }
+  ["cv-val","cv-from","cv-to"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  window.addEventListener("nc-theme-change", styleFields);
+  styleFields(); update();
+})();
+</script>

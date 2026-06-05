@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}{{ calc.name }} · {{ site_name }}{% endblock %}
+{% block description %}{{ calc.summary }}{% endblock %}
+{% block content %}
+<p class="eyebrow">// {{ calc.section }} › {{ calc.sub }}</p>
+<h1>{{ calc.name }}</h1>
+<p class="lede">{{ calc.summary }}</p>
+{% if calc.formula %}<p class="formula" style="font-family:var(--mono);color:var(--accent)">{{ calc.formula }}</p>{% endif %}
+{% if scholar %}
+<p class="scholar-link">A mind behind this:
+  <a href="{{ scholar.url }}">{{ scholar.name }}</a>
+  {% if scholar.era %}<span class="count-pill">{{ scholar.era }}</span>{% endif %}
+</p>
+{% endif %}
+{% include viz_template %}
+
+{# Step-by-step working — renders only if compute() returns a "steps" list.
+   The viz's POST response carries the steps; this panel reads the same data. #}
+{% include "_steps.html" %}
+
+{# ---- Frequently asked questions (from the calculator's faq.py) ---- #}
+{% if faqs %}
+<section class="nc-faqs" aria-labelledby="faq-heading">
+  <h2 id="faq-heading">Frequently asked questions</h2>
+  {% for faq in faqs %}
+  <article class="nc-faq">
+    <h3>{{ faq.q }}</h3>
+    <p>{{ faq.a }}</p>
+  </article>
+  {% endfor %}
+</section>
+{% endif %}
+
+{# ---- Related calculators (zero-touch) ----------------------------------
+   Auto-computed by core.related from tags/topic, with any curated `related`
+   slugs from @register shown first. `related` is passed in by the route
+   handler as related_calcs(calc.slug); empty -> the rail simply doesn't render.
+   Plain crawlable <a href> links (SEO-friendly, no JS needed). Kept OUTSIDE
+   the FAQ section so it never enters the FAQPage JSON-LD. #}
+{% if related %}
+<nav class="nc-related" aria-labelledby="related-heading">
+  <h2 id="related-heading">Related calculators</h2>
+  <ul class="nc-related-list">
+    {% for r in related %}
+    <li class="nc-related-item">
+      <a href="{{ r.url }}">{{ r.name }}</a>
+    </li>
+    {% endfor %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}
+
+{% block seo_extra %}
+{{ super() }}
+{# Breadcrumb rich result: Home › Section › Calculator. Built from the calc's
+   own fields, so every calculator gets it automatically — nothing to wire. #}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "Home", "item": "{{ site_url }}/"},
+    {"@type": "ListItem", "position": 2, "name": {{ calc.section | replace("-", " ") | title | tojson }}, "item": "{{ site_url }}/section/{{ calc.section }}"},
+    {"@type": "ListItem", "position": 3, "name": {{ calc.name | tojson }}, "item": "{{ site_url }}/calc/{{ calc.slug }}"}
+  ]
+}
+</script>
+{% if faqs %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {% for faq in faqs %}
+    {
+      "@type": "Question",
+      "name": {{ faq.q | tojson }},
+      "acceptedAnswer": {"@type": "Answer", "text": {{ faq.a | tojson }}}
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+}
+</script>
+{% endif %}
+{% endblock %}

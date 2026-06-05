@@ -1,0 +1,147 @@
+<link rel="stylesheet" href="/static/nclearn.css">
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Side a
+      <span class="nc-field"><input id="ha-a" type="number" value="6" step="any"></span></label>
+    <label>Side b
+      <span class="nc-field"><input id="ha-b" type="number" value="7" step="any"></span></label>
+    <label>Side c (base)
+      <span class="nc-field"><input id="ha-c" type="number" value="8" step="any"></span></label>
+  </div>
+
+  <div class="viz-out" id="ha-out"></div>
+
+  <canvas id="ha-diagram" width="680" height="420"
+          style="display:block;width:100%;height:auto;max-width:600px;margin:10px auto 0"></canvas>
+  <p class="viz-caption" id="ha-cap" style="font-size:.85rem;text-align:center;margin-top:.4rem;opacity:.85"></p>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="ha-disc" style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const slug = "{{ calc.slug }}";
+  const P = "ha";
+  const panel = document.querySelector('.viz-panel[data-slug="'+slug+'"]');
+  let last = null;
+
+  function styleFields(){
+    if(!window.NCSkin || !panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      if(el.type==="range") return;
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  function buildBody(){
+    return { a:$("ha-a").value, b:$("ha-b").value, c:$("ha-c").value };
+  }
+
+  async function update(){
+    
+    const body = buildBody();
+    let data;
+    try { const r=await fetch("/api/compute/"+slug,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $(P+"-out").textContent="compute error"; return; }
+    try { if(window.NCSteps) window.NCSteps.render(data.steps||[]); } catch(e){}
+    if (data.disclaimer) $(P+"-disc").textContent="\u26a0 "+data.disclaimer;
+    if (data.error){ $(P+"-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} drawDiagram(null); last=null; mountLearn(null); return; }
+    $(P+"-out").innerHTML = '<b>Area = '+data.result+'</b>  \u00b7  d = '+fmt(data.foot_d)+'  \u00b7  h = '+fmt(data.height)+'  \u00b7  Heron = '+fmt(data.area_heron)+(data.match?'  \u2713 match':'');
+    try{ window.__ncExplain(data.explanation);}catch(e){}
+    last=data; drawDiagram(data); mountLearn(data);
+  }
+
+  function mountLearn(data){
+    if(!window.NCLearn) return;
+    NCLearn.mount({ slug:slug, panel:panel, data:data, drawFrame:(data?drawFrame:undefined) });
+  }
+
+  function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
+
+  // Shared auto-fit: given natural-coordinate points [{x,y},...] and the canvas,
+  // return a mapper m(p)->{x,y} that centres and scales them to fill the box
+  // (minus margin) so NOTHING ever clips, whatever the inputs. Y is flipped so
+  // positive-y is up in natural coords. Returns {map, scale}.
+  function fitPts(pts, W, H, margin){
+    margin = margin || 48;
+    let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+    pts.forEach(p=>{ minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x); minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y); });
+    const spanX=Math.max(1e-6,maxX-minX), spanY=Math.max(1e-6,maxY-minY);
+    const sc=Math.min((W-2*margin)/spanX, (H-2*margin)/spanY);
+    const cxN=(minX+maxX)/2, cyN=(minY+maxY)/2;
+    const map=(p)=>({ x: W/2 + (p.x-cxN)*sc, y: H/2 - (p.y-cyN)*sc });
+    return { map, scale:sc };
+  }
+
+
+  function drawDiagram(d){ drawAlt(d, 1); }
+  function drawAlt(d, grow){
+    const cv=$(P+"-diagram"); if(!cv) return; const ctx=cv.getContext("2d"); const s=window.NCSkin||{};
+    const ink=s.ink||"#222", accent=s.accent||"#b50", yes=s.yes||"#3a7", soft=s.inkSoft||"#777", rule=s.rule||"#ccc";
+    const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H); const cap=$(P+"-cap");
+    if(!d){ if(cap) cap.textContent=""; return; }
+    const a=d.a,b=d.b,c=d.c, dd=d.foot_d, h=d.height;
+    // Base c on x-axis from L=(0,0) to R=(c,0). Apex above foot at (dd, h). b meets L, a meets R.
+    const Ln={x:0,y:0}, Rn={x:c,y:0}, Pn={x:dd,y:h}, Fn={x:dd,y:0};
+    const fit=fitPts([Ln,Rn,Pn], W, H, 60);
+    const L=fit.map(Ln), R=fit.map(Rn), Pp=fit.map(Pn), F=fit.map(Fn);
+    // triangle fill
+    ctx.globalAlpha=0.12; ctx.fillStyle=yes; ctx.beginPath(); ctx.moveTo(L.x,L.y); ctx.lineTo(R.x,R.y); ctx.lineTo(Pp.x,Pp.y); ctx.closePath(); ctx.fill(); ctx.globalAlpha=1;
+    // sides
+    ctx.strokeStyle=ink; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(L.x,L.y); ctx.lineTo(R.x,R.y); ctx.stroke();   // base c
+    ctx.beginPath(); ctx.moveTo(L.x,L.y); ctx.lineTo(Pp.x,Pp.y); ctx.stroke(); // b (left)
+    ctx.beginPath(); ctx.moveTo(R.x,R.y); ctx.lineTo(Pp.x,Pp.y); ctx.stroke(); // a (right)
+    // altitude (animated growth)
+    const hy = F.y + (Pp.y - F.y)*grow;
+    ctx.strokeStyle=accent; ctx.lineWidth=2; ctx.setLineDash([5,4]); ctx.beginPath(); ctx.moveTo(F.x,F.y); ctx.lineTo(F.x,hy); ctx.stroke(); ctx.setLineDash([]);
+    // right-angle marker at foot
+    ctx.strokeStyle=soft; ctx.lineWidth=1; const m=9; ctx.strokeRect(F.x, F.y-m, m, m);
+    // foot point + d bracket
+    ctx.fillStyle=accent; ctx.beginPath(); ctx.arc(F.x,F.y,4,0,Math.PI*2); ctx.fill();
+    // labels
+    ctx.fillStyle=ink; ctx.font="13px "+(s.sans||"sans-serif"); ctx.textAlign="center";
+    ctx.fillText("c = "+fmt(c), (L.x+R.x)/2, L.y+18);
+    ctx.fillText("b = "+fmt(b), (L.x+Pp.x)/2-12, (L.y+Pp.y)/2);
+    ctx.fillText("a = "+fmt(a), (R.x+Pp.x)/2+12, (R.y+Pp.y)/2);
+    ctx.fillStyle=accent; ctx.fillText("d = "+fmt(dd), (L.x+F.x)/2, F.y+18);
+    ctx.save(); ctx.translate(F.x-12,(F.y+Pp.y)/2); ctx.rotate(-Math.PI/2); ctx.fillText("h = "+fmt(h),0,0); ctx.restore();
+    ctx.fillStyle=yes; ctx.font="bold 14px "+(s.mono||"monospace"); ctx.textAlign="left";
+    ctx.fillText("\u00bd\u00b7c\u00b7h = "+fmt(d.area_alg), 16, 26);
+    if(cap) cap.textContent="Dropping the altitude h onto base c splits the triangle into two right triangles; Pythagoras locates the foot d and the height h, then \u00bd\u00b7c\u00b7h is the area.";
+  }
+
+
+  function drawFrame(ctx,t,d){ if(!d) return; drawAlt(d, (t<0.7? t/0.7 : 1)); }
+
+  ["ha-a","ha-b","ha-c"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });
+  styleFields();  update();
+})();
+</script>

@@ -1,0 +1,107 @@
+{# Investment growth: stacked area of principal + contributions + earnings over time. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Initial principal<input id="in-principal" type="number" value="10000" step="500" min="0"></label>
+    <label>Annual contribution<input id="in-annual_contribution" type="number" value="6000" step="500" min="0"></label>
+    <label>Return rate %<input id="in-rate_pct" type="number" value="7" step="0.25" min="0"></label>
+    <label>Years<input id="in-years" type="number" value="30" step="1" min="0"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="ig-chart" width="640" height="380" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="ig-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg;
+      el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px";
+      el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("ig-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = {
+      principal:+$("in-principal").value,
+      annual_contribution:+$("in-annual_contribution").value,
+      rate_pct:+$("in-rate_pct").value,
+      years:+$("in-years").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    if (window.NCSteps) window.NCSteps.render(data.steps || []);
+
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("ig-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height);
+      return;
+    }
+    $("viz-out").innerHTML =
+      `Future wealth: <b>${data.future_value}</b> &nbsp;(contributions ${data.total_contributions}, ` +
+      `earnings ${data.total_earnings})`;
+    $("ig-caption").innerHTML =
+      `Three layers stack up over the years: your original principal at the base, the cash you ` +
+      `keep adding in the middle, and the compounded earnings on top. Notice the earnings band ` +
+      `widening fastest in the later years — that is compounding gathering pace.`;
+    draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const pad=54, W=cv.width-2*pad, H=cv.height-2*pad;
+    const pts=d.series; if(!pts||pts.length<2) return;
+    const maxY=Math.max(...pts.map(p=>p.total),1)*1.05;
+    const xMax=pts[pts.length-1].year||1;
+    const X=x=>pad+(x/xMax)*W;
+    const Y=y=>pad+H-(y/maxY)*H;
+
+    // band tops: principal, principal+contrib, total(=+earnings)
+    function band(getTop, getBottom, col, alpha){
+      ctx.fillStyle=col; ctx.globalAlpha=alpha; ctx.beginPath();
+      pts.forEach((p,i)=>{ const x=X(p.year),y=Y(getTop(p)); i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+      for(let i=pts.length-1;i>=0;i--){ const p=pts[i]; ctx.lineTo(X(p.year),Y(getBottom(p))); }
+      ctx.closePath(); ctx.fill(); ctx.globalAlpha=1;
+    }
+    band(p=>p.principal, p=>0, NCSkin.inkSoft, 0.85);
+    band(p=>p.principal+p.contributions, p=>p.principal, NCSkin.yes, 0.55);
+    band(p=>p.total, p=>p.principal+p.contributions, NCSkin.accent, 0.75);
+
+    // axes
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad,Y(0)); ctx.lineTo(pad+W,Y(0)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad,pad); ctx.lineTo(pad,pad+H); ctx.stroke();
+
+    // x labels
+    ctx.fillStyle=NCSkin.inkSoft; ctx.textAlign="center"; ctx.font="11px "+(NCSkin.mono||"monospace");
+    const ticks=Math.min(6, xMax);
+    for(let i=0;i<=ticks;i++){ const yr=Math.round(xMax*i/ticks); ctx.fillText("yr "+yr, X(yr), Y(0)+16); }
+
+    // legend
+    ctx.textAlign="left"; ctx.font="12px "+(NCSkin.mono||"monospace");
+    const items=[["Principal",NCSkin.inkSoft],["Contributions",NCSkin.yes],["Earnings",NCSkin.accent]];
+    items.forEach((it,i)=>{ const y=12+i*18; ctx.globalAlpha=0.8; ctx.fillStyle=it[1]; ctx.fillRect(pad,y,12,12);
+      ctx.globalAlpha=1; ctx.fillStyle=NCSkin.ink; ctx.fillText(it[0], pad+18, y+10); });
+  }
+
+  ["in-principal","in-annual_contribution","in-rate_pct","in-years"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", update);
+  styleFields();
+  update();
+})();
+</script>

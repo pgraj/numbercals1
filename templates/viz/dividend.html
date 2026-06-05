@@ -1,0 +1,126 @@
+{# Dividend: flat income bars when DRIP off; compounding curve when DRIP on. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Stock price<input id="in-stock_price" type="number" value="20" step="1" min="0"></label>
+    <label>Shares<input id="in-shares" type="number" value="500" step="10" min="0"></label>
+    <label>Yield %<input id="in-yield_pct" type="number" value="4" step="0.1" min="0"></label>
+    <label>Years<input id="in-years" type="number" value="10" step="1" min="1"></label>
+    <label>Reinvest (DRIP)
+      <select id="in-reinvest"><option value="false">No</option><option value="true">Yes</option></select>
+    </label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="div-chart" width="640" height="380" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="div-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg;
+      el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px";
+      el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("div-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = {
+      stock_price:+$("in-stock_price").value,
+      shares:+$("in-shares").value,
+      yield_pct:+$("in-yield_pct").value,
+      years:+$("in-years").value,
+      reinvest: $("in-reinvest").value === "true"
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("div-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height);
+      return;
+    }
+    const lastCum = data.series.length ? data.series[data.series.length-1].cumulative : 0;
+    $("viz-out").innerHTML = data.reinvest
+      ? `Annual dividend (year 1): <b>${data.annual_dividend}</b> &nbsp; Holding after term: <b>${data.future_value}</b>`
+      : `Annual dividend: <b>${data.annual_dividend}</b> &nbsp; Total received over term: <b>${lastCum.toFixed(2)}</b>`;
+    $("div-caption").innerHTML = data.reinvest
+      ? `With DRIP on, each dividend buys more shares, so the holding value curves upward — `
+        + `every year's payout enlarges the base that pays the next one. That bend is compounding.`
+      : `Each bar is the running total of dividends collected by that year. The same flat payout `
+        + `arrives annually, so the total climbs in equal steps — a straight staircase. The dark `
+        + `segment on top of each bar is that single year's payment. Switch DRIP to "Yes" to see `
+        + `the staircase bend into a compounding curve.`;
+    draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const pad=54, W=cv.width-2*pad, H=cv.height-2*pad;
+    const pts=d.series; if(!pts||!pts.length) return;
+
+    if(d.reinvest){
+      // compounding curve of holding value
+      const ys=pts.map(p=>p.value);
+      const yMax=Math.max(...ys)*1.05, yMin=Math.min(d.invested, ...ys)*0.95;
+      const xMax=pts.length;
+      const X=i=>pad+((i+1)/xMax)*W;
+      const Y=y=>pad+H-((y-yMin)/((yMax-yMin)||1))*H;
+      ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(pad,pad+H); ctx.lineTo(pad+W,pad+H); ctx.stroke();
+      ctx.strokeStyle=NCSkin.accent; ctx.lineWidth=2.5; ctx.beginPath();
+      pts.forEach((p,i)=> i?ctx.lineTo(X(i),Y(p.value)):ctx.moveTo(X(i),Y(p.value)));
+      ctx.stroke();
+      pts.forEach((p,i)=>{ ctx.fillStyle=NCSkin.yes; ctx.beginPath(); ctx.arc(X(i),Y(p.value),3,0,2*Math.PI); ctx.fill(); });
+      ctx.fillStyle=NCSkin.inkSoft; ctx.textAlign="center"; ctx.font="11px "+(NCSkin.mono||"monospace");
+      pts.forEach((p,i)=>{ if(i%Math.ceil(pts.length/8||1)===0||i===pts.length-1) ctx.fillText("yr "+p.year, X(i), pad+H+16); });
+    } else {
+      // cumulative-income staircase: bar height = running total received,
+      // with the current year's payout shown as a darker cap on top.
+      const maxV=Math.max(...pts.map(p=>p.cumulative),1)*1.12;
+      const n=pts.length, slot=W/n, bw=Math.min(slot*0.62,46);
+      const Y=v=>pad+H-(v/maxV)*H;
+      ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(pad,Y(0)); ctx.lineTo(pad+W,Y(0)); ctx.stroke();
+      // light horizontal guides
+      ctx.fillStyle=NCSkin.inkSoft; ctx.textAlign="right"; ctx.font="10px "+(NCSkin.mono||"monospace");
+      for(let g=1;g<=4;g++){
+        const gv=maxV*g/4, gy=Y(gv);
+        ctx.strokeStyle=NCSkin.rule; ctx.globalAlpha=0.4;
+        ctx.beginPath(); ctx.moveTo(pad,gy); ctx.lineTo(pad+W,gy); ctx.stroke();
+        ctx.globalAlpha=1; ctx.fillText(Math.round(gv), pad-6, gy+3);
+      }
+      pts.forEach((p,i)=>{
+        const x=pad+slot*i+(slot-bw)/2;
+        const yTotal=Y(p.cumulative), yPrev=Y(p.cumulative-p.dividend);
+        // running total (accent) up to last year's total
+        ctx.fillStyle=NCSkin.accent; ctx.fillRect(x,yPrev,bw,Y(0)-yPrev);
+        // this year's payout (darker ink cap)
+        ctx.fillStyle=NCSkin.ink; ctx.fillRect(x,yTotal,bw,yPrev-yTotal);
+        ctx.fillStyle=NCSkin.inkSoft; ctx.textAlign="center"; ctx.font="10px "+(NCSkin.mono||"monospace");
+        if(i%Math.ceil(n/12||1)===0||i===n-1) ctx.fillText("yr "+p.year, x+bw/2, Y(0)+14);
+      });
+    }
+  }
+
+  ["in-stock_price","in-shares","in-yield_pct","in-years","in-reinvest"]
+    .forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", update);
+  styleFields();
+  update();
+})();
+</script>

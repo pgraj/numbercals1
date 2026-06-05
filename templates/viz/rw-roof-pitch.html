@@ -1,0 +1,127 @@
+<link rel="stylesheet" href="/static/nclearn.css">
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Horizontal run (m)
+      <span class="nc-field"><input id="rp-run" type="number" value="4" step="any" min="0.1"></span></label>
+    <label>Vertical rise (m)
+      <span class="nc-field"><input id="rp-rise" type="number" value="2.5" step="any" min="0.1"></span></label>
+    <label>Drag the rise
+      <span class="nc-field"><input id="rp-range" type="range" value="2.5" min="0.5" max="8" step="0.1" style="width:200px"></span></label>
+  </div>
+
+  <div class="viz-out" id="rp-out"></div>
+
+  <canvas id="rp-diagram" width="680" height="420"
+          style="display:block;width:100%;height:auto;max-width:600px;margin:10px auto 0"></canvas>
+  <p class="viz-caption" id="rp-cap" style="font-size:.85rem;text-align:center;margin-top:.4rem;opacity:.85"></p>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="rp-disc" style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const slug = "{{ calc.slug }}";
+  const P = "rp";
+  const panel = document.querySelector('.viz-panel[data-slug="'+slug+'"]');
+  let last = null;
+
+  function styleFields(){
+    if(!window.NCSkin || !panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      if(el.type==="range") return;
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  function buildBody(){
+    return { run_width:$("rp-run").value, rise:$("rp-rise").value };
+  }
+
+  async function update(){
+    const body = buildBody();
+    let data;
+    try { const r=await fetch("/api/compute/"+slug,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $(P+"-out").textContent="compute error"; return; }
+    try { if(window.NCSteps) window.NCSteps.render(data.steps||[]); } catch(e){}
+    if (data.disclaimer) $(P+"-disc").textContent="\u26a0 "+data.disclaimer;
+    if (data.error){ $(P+"-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} drawScene(null); last=null; mountLearn(null); return; }
+    $(P+"-out").innerHTML = "<b>Pitch \u2248 "+data.result+"\u00b0</b>  \u00b7  rafter "+fmt(data.rafter)+" m";
+    try{ window.__ncExplain(data.explanation);}catch(e){}
+    last=data; drawScene(data); mountLearn(data);
+  }
+
+  function mountLearn(data){
+    if(!window.NCLearn) return;
+    NCLearn.mount({ slug:slug, panel:panel, data:data, drawFrame:(data?drawFrame:undefined) });
+  }
+  function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
+
+  function drawScene(d){ drawAt(d,1); }
+  function drawAt(d, sweep){
+    const cv=$(P+"-diagram"); if(!cv) return; const ctx=cv.getContext("2d"); const s=window.NCSkin||{};
+    const ink=s.ink||"#222", accent=s.accent||"#b5651d", yes=s.yes||"#3a7d44", soft=s.inkSoft||"#777", rule=s.rule||"#ccc";
+    const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H); const cap=$(P+"-cap");
+    if(!d){ if(cap) cap.textContent=""; return; }
+    const run=d.run_width, rise=d.rise, pitch=d.pitch_deg, rafter=d.rafter;
+    // draw a symmetric roof: wall base from -run..+run, ridge at +rise. fit.
+    const cx=W/2, baseY=H-90, budget=baseY-60, halfspan=(W-160)/2;
+    const sc=Math.min(halfspan/Math.max(run,1), budget/Math.max(rise,1));
+    const lx=cx-run*sc, rx=cx+run*sc, ridgeY=baseY - rise*sweep*sc;
+    // walls
+    ctx.strokeStyle=soft; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(lx,baseY); ctx.lineTo(lx,baseY+50); ctx.moveTo(rx,baseY); ctx.lineTo(rx,baseY+50); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(lx-20,baseY+50); ctx.lineTo(rx+20,baseY+50); ctx.stroke();
+    // ceiling joist (the run line)
+    ctx.strokeStyle=rule; ctx.setLineDash([4,4]); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(lx,baseY); ctx.lineTo(rx,baseY); ctx.stroke(); ctx.setLineDash([]);
+    // right half triangle highlighted: cx,baseY -> rx,baseY -> ridge(cx,ridgeY)
+    ctx.globalAlpha=0.12; ctx.fillStyle=accent; ctx.beginPath(); ctx.moveTo(cx,baseY); ctx.lineTo(rx,baseY); ctx.lineTo(cx,ridgeY); ctx.closePath(); ctx.fill(); ctx.globalAlpha=1;
+    // rafters
+    ctx.strokeStyle=ink; ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(lx,baseY); ctx.lineTo(cx,ridgeY); ctx.lineTo(rx,baseY); ctx.stroke();
+    // rise (vertical from ridge to base)
+    ctx.strokeStyle=yes; ctx.lineWidth=2; ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(cx,baseY); ctx.lineTo(cx,ridgeY); ctx.stroke(); ctx.setLineDash([]);
+    // pitch angle arc at right eave (rx,baseY)
+    ctx.strokeStyle=yes; ctx.lineWidth=2; const a1=-Math.atan2(baseY-ridgeY, cx-rx)+Math.PI;
+    ctx.beginPath(); ctx.arc(rx,baseY,30, Math.PI, Math.PI - Math.atan2(baseY-ridgeY, rx-cx), true); ctx.stroke();
+    ctx.fillStyle=yes; ctx.font="bold 13px "+(s.mono||"monospace"); ctx.textAlign="right"; ctx.fillText(fmt(Math.atan2(rise*sweep,run)*180/Math.PI)+"\u00b0", rx-34, baseY-8);
+    // labels
+    ctx.fillStyle=soft; ctx.font="12px "+(s.sans||"sans-serif"); ctx.textAlign="center";
+    ctx.fillText("run = "+fmt(run)+" m", (cx+rx)/2, baseY+16);
+    ctx.fillStyle=yes; ctx.save(); ctx.translate(cx-14,(baseY+ridgeY)/2); ctx.rotate(-Math.PI/2); ctx.fillText("rise "+fmt(rise*sweep)+" m",0,0); ctx.restore();
+    ctx.fillStyle=accent; ctx.save(); const mx=(cx+rx)/2,my=(ridgeY+baseY)/2; ctx.translate(mx+4,my-6); ctx.rotate(Math.atan2(baseY-ridgeY,cx-rx)); ctx.textAlign="center"; ctx.fillText("rafter "+fmt(rafter)+" m",0,0); ctx.restore();
+    ctx.fillStyle=ink; ctx.font="bold 14px "+(s.mono||"monospace"); ctx.textAlign="left"; ctx.fillText("pitch \u2248 "+fmt(pitch)+"\u00b0", 16, 26);
+    if(cap) cap.textContent="Half the roof is a right triangle: horizontal run (adjacent), vertical rise (opposite), the sloping rafter as the hypotenuse.";
+  }
+
+  function drawFrame(ctx,t,d){ if(!d) return; drawAt(d,(t<0.75? t/0.75 : 1)); }
+
+  ["rp-run","rp-rise"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  (function(){ const rng=$("rp-range"), num=$("rp-rise"); rng.addEventListener("input",()=>{num.value=rng.value;update();}); num.addEventListener("input",()=>{const v=parseFloat(num.value);if(!isNaN(v)&&v>=0.5&&v<=8)rng.value=v;}); })();
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) drawScene(last); });
+  styleFields(); update();
+})();
+</script>

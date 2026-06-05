@@ -1,0 +1,47 @@
+/* nclearn.css — NumberCals shared learning engine styling (Trigonometry build)
+ *
+ * Deliberately minimal: nclearn.js sets the themable colours inline from NCSkin
+ * tokens (so they recolour on light/sepia/dark). This file only carries layout,
+ * spacing, and motion-safety that doesn't depend on theme tokens. Linked from
+ * each trig viz template; no edits to app.css or base.html.
+ */
+
+.nclearn-seg {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.nclearn-seg button {
+  line-height: 1.2;
+  transition: background-color .15s ease, color .15s ease;
+}
+
+.nclearn-seg button + button {
+  border-left: 1px solid currentColor;
+  border-left-color: inherit;
+}
+
+.nclearn-anim {
+  margin: 4px 0 6px;
+}
+
+.nclearn-play {
+  line-height: 1.2;
+  transition: background-color .15s ease, color .15s ease;
+}
+
+.nclearn-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 640px;
+}
+
+/* Reduced-motion users: the JS already starts paused and never auto-loops.
+   This is a belt-and-braces hint for any CSS-driven affordance. */
+@media (prefers-reduced-motion: reduce) {
+  .nclearn-seg button,
+  .nclearn-play {
+    transition: none;
+  }
+}

@@ -1,0 +1,96 @@
+{# Step-by-step working panel — shared partial.
+   Renders nothing unless compute() returns a non-empty "steps" list.
+   The viz template calls window.NCSteps.render(data.steps) after each compute.
+
+   The toggle uses .nc-steps-toggle button.active (filled accent) so the
+   selected view is unmistakable, matching the calculator's mode toggles. #}
+<div class="nc-steps" id="nc-steps" hidden>
+  <div class="nc-steps-toggle" role="group" aria-label="Answer detail">
+    <button type="button" id="nc-steps-direct" class="active" aria-pressed="true">Direct answer</button>
+    <button type="button" id="nc-steps-working" aria-pressed="false">Step-by-step working</button>
+  </div>
+  <ol class="nc-steps-list" id="nc-steps-list" hidden></ol>
+</div>
+
+<script>
+(function(){
+  const wrap   = document.getElementById("nc-steps");
+  const list   = document.getElementById("nc-steps-list");
+  const bDirect = document.getElementById("nc-steps-direct");
+  const bWork   = document.getElementById("nc-steps-working");
+  let mathjaxLoading = null;
+  let currentSteps = [];
+
+  function loadMathJax(){
+    if (mathjaxLoading) return mathjaxLoading;
+    window.MathJax = {
+      tex: { inlineMath: [["\\(","\\)"]], displayMath: [["\\[","\\]"]] },
+      options: { skipHtmlTags: ["script","noscript","style","textarea","pre"] }
+    };
+    mathjaxLoading = new Promise((resolve)=>{
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js";
+      s.async = true; s.onload = () => resolve(); s.onerror = () => resolve();
+      document.head.appendChild(s);
+    });
+    return mathjaxLoading;
+  }
+
+  function buildList(steps){
+    list.innerHTML = "";
+    steps.forEach((st, i)=>{
+      const li = document.createElement("li");
+      const label = document.createElement("div");
+      label.className = "nc-step-label";
+      label.textContent = st.label || ("Step " + (i+1));
+      li.appendChild(label);
+      if (st.math){
+        const m = document.createElement("div");
+        m.className = "nc-step-math";
+        m.innerHTML = st.math;
+        li.appendChild(m);
+      }
+      if (st.note){
+        const n = document.createElement("div");
+        n.className = "nc-step-note";
+        n.textContent = st.note;
+        li.appendChild(n);
+      }
+      list.appendChild(li);
+    });
+  }
+
+  async function showWorking(){
+    bWork.classList.add("active"); bDirect.classList.remove("active");
+    bWork.setAttribute("aria-pressed","true"); bDirect.setAttribute("aria-pressed","false");
+    buildList(currentSteps);
+    const needsMath = currentSteps.some(s => s.math && /\\\(|\\\[/.test(s.math));
+    if (needsMath){
+      await loadMathJax();
+      if (window.MathJax && window.MathJax.typesetPromise){
+        try { await window.MathJax.typesetPromise([list]); } catch(e){}
+      }
+    }
+    list.hidden = false;
+  }
+
+  function showDirect(){
+    bDirect.classList.add("active"); bWork.classList.remove("active");
+    bDirect.setAttribute("aria-pressed","true"); bWork.setAttribute("aria-pressed","false");
+    list.hidden = true;
+  }
+
+  bWork.addEventListener("click", showWorking);
+  bDirect.addEventListener("click", showDirect);
+
+  window.NCSteps = {
+    render: function(steps){
+      currentSteps = Array.isArray(steps) ? steps : [];
+      if (currentSteps.length === 0){ wrap.hidden = true; return; }
+      wrap.hidden = false;
+      if (bWork.classList.contains("active")) showWorking();
+      else showDirect();
+    }
+  };
+})();
+</script>

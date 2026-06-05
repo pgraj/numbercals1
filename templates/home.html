@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}{{ site_name }} — Calculators for the Curious{% endblock %}
+
+{% block content %}
+<p class="eyebrow">// {{ site_name }} · one stop for checking a calculation</p>
+<h1>{{ tagline }}</h1>
+
+<!-- Home page IS a scientific calculator with a standard/scientific toggle -->
+<div class="calc-shell" id="sci-calc">
+  <div class="calc-display" id="calc-display">0</div>
+  <div class="calc-mode">
+    <button id="mode-standard">standard</button>
+    <button id="mode-scientific" class="op">scientific</button>
+  </div>
+  <div class="keys scientific" id="calc-keys"></div>
+</div>
+
+<section class="home-intro">
+  <p>NumberCals began with a simple frustration: you punch a few numbers into a
+  search box, and the answer that comes back is a black box. No working, no sense
+  of <em>why</em>, and certainly no picture of what the maths is actually doing.
+  This site is the opposite of that. Every calculator here shows its formula,
+  walks the steps where steps help, and — wherever the maths allows — draws the
+  result so you can <em>see</em> how the numbers move when you change them.</p>
+
+  <p>It is built for the curious: the student checking homework, the borrower
+  working out what a loan really costs over thirty years, the small-business
+  owner finding a break-even point, the saver watching compounding do its quiet
+  work. You do not need an account, and there is nothing to install. Pick a
+  subject from the sidebar, choose a calculator, and the rest explains itself.</p>
+
+  <h2>Why you can trust the numbers</h2>
+  <p>Every formula on the site is the standard, textbook one — no shortcuts, no
+  invented methods. Each calculator is checked against known worked examples
+  before it goes live, and each carries plain-language notes explaining what it
+  assumes and where its limits are. Many also answer the questions people
+  actually ask: how to read the graph, what a term means, and where the
+  calculation shows up in real life. The tools are aids for understanding and
+  estimation — useful for learning and for sanity-checking, and always worth
+  confirming independently before a financial, academic, or professional
+  decision rests on them.</p>
+
+  <h2>From Aryabhata to algorithms</h2>
+  <p>The maths we lean on every day was hard-won over centuries, by named people
+  in real places. NumberCals keeps that thread visible: where a calculator rests
+  on a particular scholar's work, it says so and links to a short profile. It is
+  a small way of remembering that behind every clean formula is someone who once
+  did not have it — and worked it out anyway.</p>
+</section>
+
+<h2>Explore by subject</h2>
+<p class="lede">Each subject is a folder on disk. Add a calculator and it
+appears here automatically — nothing here is hand-maintained.</p>
+<div class="section-grid">
+  {% for s in sections %}
+  <a class="section-tile" href="/section/{{ s.id }}"
+     style="border-top:3px solid hsl({{ s.hue }} 45% 45%)">
+    <span class="glyph">{{ s.glyph }}</span>
+    <span class="name">{{ s.name }}</span>
+    {% if s.blurb %}<span class="blurb">{{ s.blurb }}</span>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+<h2>Minds behind Maths</h2>
+<p class="lede">The scholars whose laws and formulas power these tools —
+from Aryabhata to the present. <a href="/scholars">Meet them →</a></p>
+
+<script src="/static/calc.js"></script>
+<script>
+// Honor /?calc=standard or /?calc=scientific from the sidebar links.
+// calc.js above is a synchronous script, so by the time this runs it has
+// already wired the mode buttons. Clicking NOW (not on 'load') applies the
+// mode before the browser's first paint, so there is no visible jump.
+(function(){
+  try {
+    var mode = new URLSearchParams(window.location.search).get('calc');
+    if (mode !== 'standard' && mode !== 'scientific') return;
+    var btn = document.getElementById('mode-' + mode);
+    if (btn) btn.click();
+  } catch(e){}
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ section.name }} · {{ site_name }}{% endblock %}
+{% block content %}
+<p class="eyebrow">// {{ section.name | lower }}</p>
+<h1>{{ section.glyph }} {{ section.name }}</h1>
+{% if section.blurb %}<p class="lede">{{ section.blurb }}</p>{% endif %}
+{% for t in topics %}
+  {% if t.topic %}<h2 class="topic-heading">{{ t.topic }}</h2>{% endif %}
+  {% for sub in t.subs %}
+  <details class="sub-block sub-block-collapsible" open>
+    <summary><h3>{{ sub.name }} <span class="sub-count">{{ sub.calcs | length }}</span></h3></summary>
+    {% for c in sub.calcs %}
+    <div class="calc-row">
+      <a href="{{ c.url }}">{{ c.name }}</a>
+      <span class="formula">{{ c.formula }}</span>
+    </div>
+    {% endfor %}
+  </details>
+  {% endfor %}
+{% else %}
+  <p class="lede">No calculators here yet.</p>
+{% endfor %}
+{% endblock %}

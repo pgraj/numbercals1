@@ -1,0 +1,251 @@
+{# Property value: mode toggle (simple / scenarios / mortgage).
+   simple    -> nominal vs real value curves, inflation gap shaded.
+   scenarios -> low/avg/high nominal fan.
+   mortgage  -> nominal value + growing equity, plus equity/ROI readout. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+
+  <div class="pv-modes" role="group" aria-label="Estimator depth"
+       style="display:flex;gap:0;margin-bottom:12px;border:1px solid var(--nc-rule,#ccc);border-radius:8px;overflow:hidden;max-width:420px">
+    <button type="button" class="pv-mode" data-mode="simple"></button>
+    <button type="button" class="pv-mode" data-mode="scenarios"></button>
+    <button type="button" class="pv-mode" data-mode="mortgage"></button>
+  </div>
+
+  <div class="viz-inputs">
+    <label>Purchase price<input id="in-price" type="number" value="600000" step="10000" min="0"></label>
+    <label>Appreciation %<input id="in-appreciation_pct" type="number" value="5" step="0.25" min="-50"></label>
+    <label>Years<input id="in-years" type="number" value="10" step="1" min="0"></label>
+    <label>Inflation %<input id="in-inflation_pct" type="number" value="3" step="0.1" min="0"></label>
+    <label class="pv-mort">Deposit<input id="in-deposit" type="number" value="120000" step="10000" min="0"></label>
+    <label class="pv-mort">Loan rate %<input id="in-loan_rate_pct" type="number" value="6" step="0.25" min="0"></label>
+    <label class="pv-mort">Loan term (yrs)<input id="in-loan_years" type="number" value="30" step="1" min="1"></label>
+  </div>
+
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="pv-chart" width="660" height="400" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="pv-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+
+<script>
+(function(){
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg;
+      el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px";
+      el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("pv-chart"), ctx = cv.getContext("2d");
+  let mode = "simple";
+
+  const LABELS = {simple:"Simple", scenarios:"Scenarios", mortgage:"With Mortgage"};
+
+  function styleModeButtons(){
+    document.querySelectorAll(".pv-mode").forEach(b=>{
+      const on = b.dataset.mode === mode;
+      b.textContent = LABELS[b.dataset.mode];
+      b.style.flex = "1";
+      b.style.padding = "8px 10px";
+      b.style.border = "none";
+      b.style.cursor = "pointer";
+      b.style.font = "13px/1.2 "+(NCSkin.mono||"inherit");
+      b.style.background = on ? NCSkin.accent : (NCSkin.paper2 || "transparent");
+      b.style.color = on ? (NCSkin.paper2 || "#fff") : NCSkin.ink;
+      b.style.borderRight = "1px solid "+NCSkin.rule;
+    });
+    // show/hide mortgage-only inputs
+    document.querySelectorAll(".pv-mort").forEach(el=>{
+      el.style.display = mode === "mortgage" ? "" : "none";
+    });
+  }
+
+  async function update(){
+    const body = {
+      price:+$("in-price").value,
+      appreciation_pct:+$("in-appreciation_pct").value,
+      years:+$("in-years").value,
+      inflation_pct:+$("in-inflation_pct").value,
+      mode: mode,
+      deposit:+$("in-deposit").value,
+      loan_rate_pct:+$("in-loan_rate_pct").value,
+      loan_years:+$("in-loan_years").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("pv-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height);
+      if (window.NCSteps) window.NCSteps.render([]);
+      return;
+    }
+
+    const fmt = n => Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+    if (mode === "mortgage"){
+      const roi = data.roi_on_deposit_pct;
+      $("viz-out").innerHTML =
+        `Value: <b>${fmt(data.nominal_value)}</b> &nbsp; Equity: <b>${fmt(data.equity)}</b> ` +
+        `&nbsp; Real equity: <b>${fmt(data.real_equity)}</b>` +
+        (roi!=null ? ` &nbsp; Real ROI on deposit: <b>${roi}%</b>` : ``);
+      $("pv-caption").innerHTML =
+        `The upper line is the property's nominal value; the filled area below it is your ` +
+        `growing equity — value minus the loan you still owe — so the gap up to the line is ` +
+        `the bank's share shrinking over time. "Real" figures are in today's dollars after inflation.`;
+    } else if (mode === "scenarios"){
+      const s = data.scenarios;
+      $("viz-out").innerHTML =
+        `Low (${s.low.rate_pct}%): <b>${fmt(s.low.nominal_value)}</b> &nbsp; ` +
+        `Avg (${s.avg.rate_pct}%): <b>${fmt(s.avg.nominal_value)}</b> &nbsp; ` +
+        `High (${s.high.rate_pct}%): <b>${fmt(s.high.nominal_value)}</b>`;
+      $("pv-caption").innerHTML =
+        `Three nominal paths fan out from the same purchase price: a pessimistic low band, ` +
+        `your average estimate, and an optimistic high band — two points either side of your ` +
+        `rate. The width of the fan is how uncertain the outcome is the further out you look.`;
+    } else {
+      $("viz-out").innerHTML =
+        `Nominal value: <b>${fmt(data.nominal_value)}</b> &nbsp; ` +
+        `Real value: <b>${fmt(data.real_value)}</b> &nbsp; ` +
+        `Real gain: <b>${fmt(data.real_gain)}</b>`;
+      $("pv-caption").innerHTML =
+        `The upper line is the future price in nominal dollars; the lower line is the same ` +
+        `value in today's money once inflation is removed. The shaded band between them is ` +
+        `value lost to inflation — if the lower line barely rises, the property is only just ` +
+        `keeping pace with rising prices generally.`;
+    }
+
+    if (window.NCSteps) window.NCSteps.render(data.steps || []);
+    draw(data);
+  }
+
+  // ---- drawing helpers ----
+  function axes(pad, W, H, yMax, years){
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1; ctx.globalAlpha=1;
+    ctx.beginPath(); ctx.moveTo(pad,pad+H); ctx.lineTo(pad+W,pad+H); ctx.stroke();
+    ctx.fillStyle=NCSkin.inkSoft; ctx.font="10px "+(NCSkin.mono||"monospace");
+    ctx.textAlign="right";
+    for(let g=0;g<=4;g++){
+      const gv=yMax*g/4, gy=pad+H-(gv/yMax)*H;
+      ctx.strokeStyle=NCSkin.rule; ctx.globalAlpha=0.35;
+      ctx.beginPath(); ctx.moveTo(pad,gy); ctx.lineTo(pad+W,gy); ctx.stroke();
+      ctx.globalAlpha=1;
+      ctx.fillText(Math.round(gv/1000)+"k", pad-6, gy+3);
+    }
+    ctx.textAlign="center";
+    const step = Math.ceil(years/8)||1;
+    for(let yr=0;yr<=years;yr+=step){
+      const x=pad+(yr/(years||1))*W;
+      ctx.fillText("yr "+yr, x, pad+H+15);
+    }
+  }
+  function line(pts, xOf, yOf, col, width, dash){
+    ctx.strokeStyle=col; ctx.lineWidth=width; ctx.setLineDash(dash||[]);
+    ctx.beginPath();
+    pts.forEach((p,i)=> i?ctx.lineTo(xOf(p),yOf(p)):ctx.moveTo(xOf(p),yOf(p)));
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const pad=56, W=cv.width-2*pad, H=cv.height-2*pad;
+    const years=d.years;
+    const X=yr=>pad+(yr/(years||1))*W;
+
+    if (mode === "scenarios"){
+      const s=d.scenarios;
+      const all=[...s.high.series, ...s.low.series].map(p=>p.nominal);
+      const yMax=Math.max(...all,1)*1.08;
+      const Y=v=>pad+H-(v/yMax)*H;
+      axes(pad,W,H,yMax,years);
+      const xa=p=>X(p.year), ya=p=>Y(p.nominal);
+      // band fill between low and high
+      ctx.fillStyle=NCSkin.accent; ctx.globalAlpha=0.12;
+      ctx.beginPath();
+      s.high.series.forEach((p,i)=> i?ctx.lineTo(xa(p),ya(p)):ctx.moveTo(xa(p),ya(p)));
+      for(let i=s.low.series.length-1;i>=0;i--){const p=s.low.series[i];ctx.lineTo(xa(p),ya(p));}
+      ctx.closePath(); ctx.fill(); ctx.globalAlpha=1;
+      line(s.low.series, xa, ya, NCSkin.inkSoft, 1.5, [5,4]);
+      line(s.high.series, xa, ya, NCSkin.inkSoft, 1.5, [5,4]);
+      line(s.avg.series, xa, ya, NCSkin.accent, 2.6);
+      // labels at right end
+      ctx.fillStyle=NCSkin.ink; ctx.textAlign="left"; ctx.font="11px "+(NCSkin.mono||"monospace");
+      ctx.fillText("high", X(years)+4, Y(s.high.series[years].nominal)+3);
+      ctx.fillText("avg",  X(years)+4, Y(s.avg.series[years].nominal)+3);
+      ctx.fillText("low",  X(years)+4, Y(s.low.series[years].nominal)+3);
+      return;
+    }
+
+    if (mode === "mortgage"){
+      const yMax=Math.max(d.nominal_value,1)*1.08;
+      const Y=v=>pad+H-(v/yMax)*H;
+      axes(pad,W,H,yMax,years);
+      const xa=p=>X(p.year), yn=p=>Y(p.nominal);
+      // approximate equity per year: value(yr) - linearly-implied balance share.
+      // We only have final balance/equity from compute, so model balance decline
+      // proportionally from initial loan to final balance for the visual.
+      const loan=d.loan, finalBal=d.loan_balance;
+      const eqSeries=d.series.map(p=>{
+        const frac = years? p.year/years : 0;
+        const bal = loan + (finalBal-loan)*frac;
+        return {year:p.year, equity: Math.max(p.nominal - bal, 0)};
+      });
+      // equity area
+      ctx.fillStyle=NCSkin.yes; ctx.globalAlpha=0.28;
+      ctx.beginPath();
+      ctx.moveTo(X(0), pad+H);
+      eqSeries.forEach(p=>ctx.lineTo(X(p.year), Y(p.equity)));
+      ctx.lineTo(X(years), pad+H); ctx.closePath(); ctx.fill(); ctx.globalAlpha=1;
+      line(eqSeries, p=>X(p.year), p=>Y(p.equity), NCSkin.yes, 2);
+      // nominal value line on top
+      line(d.series, xa, yn, NCSkin.accent, 2.6);
+      ctx.fillStyle=NCSkin.ink; ctx.textAlign="left"; ctx.font="11px "+(NCSkin.mono||"monospace");
+      ctx.fillText("value",  X(years)+4, Y(d.nominal_value)+3);
+      ctx.fillText("equity", X(years)+4, Y(eqSeries[years].equity)+3);
+      return;
+    }
+
+    // simple: nominal vs real, inflation gap shaded
+    const yMax=Math.max(d.nominal_value,1)*1.08;
+    const Y=v=>pad+H-(v/yMax)*H;
+    axes(pad,W,H,yMax,years);
+    const xa=p=>X(p.year);
+    // inflation gap fill between nominal and real
+    ctx.fillStyle=NCSkin.accent; ctx.globalAlpha=0.12;
+    ctx.beginPath();
+    d.series.forEach((p,i)=> i?ctx.lineTo(xa(p),Y(p.nominal)):ctx.moveTo(xa(p),Y(p.nominal)));
+    for(let i=d.series.length-1;i>=0;i--){const p=d.series[i];ctx.lineTo(xa(p),Y(p.real));}
+    ctx.closePath(); ctx.fill(); ctx.globalAlpha=1;
+    line(d.series, xa, p=>Y(p.real), NCSkin.inkSoft, 2, [5,4]);
+    line(d.series, xa, p=>Y(p.nominal), NCSkin.accent, 2.6);
+    ctx.fillStyle=NCSkin.ink; ctx.textAlign="left"; ctx.font="11px "+(NCSkin.mono||"monospace");
+    ctx.fillText("nominal", X(years)+4, Y(d.nominal_value)+3);
+    ctx.fillText("real",    X(years)+4, Y(d.series[years].real)+3);
+  }
+
+  // ---- wiring ----
+  document.querySelectorAll(".pv-mode").forEach(b=>{
+    b.addEventListener("click", ()=>{ mode=b.dataset.mode; styleModeButtons(); update(); });
+  });
+  ["in-price","in-appreciation_pct","in-years","in-inflation_pct",
+   "in-deposit","in-loan_rate_pct","in-loan_years"]
+    .forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ styleModeButtons(); update(); });
+
+  styleModeButtons();
+  styleFields();
+  update();
+})();
+</script>

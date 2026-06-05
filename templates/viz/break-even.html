@@ -1,0 +1,123 @@
+{# Break-even: revenue line and cost line crossing; loss zone / profit zone shaded. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Fixed costs<input id="in-fixed_costs" type="number" value="10000" step="500" min="0"></label>
+    <label>Variable cost/unit<input id="in-variable_cost" type="number" value="5" step="0.5" min="0"></label>
+    <label>Price/unit<input id="in-price" type="number" value="20" step="0.5" min="0"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="be-chart" width="640" height="380" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="be-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg;
+      el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px";
+      el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("be-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = {
+      fixed_costs:+$("in-fixed_costs").value,
+      variable_cost:+$("in-variable_cost").value,
+      price:+$("in-price").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    if (window.NCSteps) window.NCSteps.render(data.steps || []);
+
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("be-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height);
+      return;
+    }
+    $("viz-out").innerHTML =
+      `Break-even: <b>${Math.round(data.units)}</b> units &nbsp; (revenue <b>${data.revenue}</b>)`;
+    $("be-caption").innerHTML =
+      `The rising lines are total revenue and total cost. They meet at the break-even point — ` +
+      `about ${Math.round(data.units)} units. Left of the crossing, cost is above revenue (the ` +
+      `loss zone); right of it, revenue wins (the profit zone). Each unit adds ${data.contribution} of contribution.`;
+    draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const pad=52, W=cv.width-2*pad, H=cv.height-2*pad;
+    const pts=d.series; if(!pts||pts.length<2) return;
+    const maxU=pts[pts.length-1].units||1;
+    const maxY=Math.max(...pts.map(p=>Math.max(p.revenue,p.cost)),1);
+    const X=u=>pad+(u/maxU)*W;
+    const Y=y=>pad+H-(y/maxY)*H;
+    const beU=d.units, beY=d.revenue;
+
+    // shade profit zone (right of break-even, between revenue & cost)
+    ctx.fillStyle=NCSkin.yes; ctx.globalAlpha=0.12;
+    ctx.beginPath();
+    let started=false;
+    pts.filter(p=>p.units>=beU).forEach(p=>{ const x=X(p.units),y=Y(p.revenue); started?ctx.lineTo(x,y):(ctx.moveTo(x,y),started=true);});
+    for(let i=pts.length-1;i>=0;i--){ const p=pts[i]; if(p.units>=beU) ctx.lineTo(X(p.units),Y(p.cost)); }
+    ctx.closePath(); ctx.fill();
+    // shade loss zone (left of break-even, between cost & revenue)
+    ctx.fillStyle=NCSkin.accent; ctx.beginPath(); started=false;
+    pts.filter(p=>p.units<=beU).forEach(p=>{ const x=X(p.units),y=Y(p.cost); started?ctx.lineTo(x,y):(ctx.moveTo(x,y),started=true);});
+    for(let i=pts.length-1;i>=0;i--){ const p=pts[i]; if(p.units<=beU) ctx.lineTo(X(p.units),Y(p.revenue)); }
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha=1;
+
+    // axes
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad,Y(0)); ctx.lineTo(pad+W,Y(0)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad,pad); ctx.lineTo(pad,pad+H); ctx.stroke();
+
+    // cost line
+    ctx.strokeStyle=NCSkin.inkSoft; ctx.lineWidth=2; ctx.beginPath();
+    pts.forEach((p,i)=> i?ctx.lineTo(X(p.units),Y(p.cost)):ctx.moveTo(X(p.units),Y(p.cost)));
+    ctx.stroke();
+    // revenue line
+    ctx.strokeStyle=NCSkin.accent; ctx.lineWidth=2.5; ctx.beginPath();
+    pts.forEach((p,i)=> i?ctx.lineTo(X(p.units),Y(p.revenue)):ctx.moveTo(X(p.units),Y(p.revenue)));
+    ctx.stroke();
+
+    // break-even marker + guide lines
+    ctx.strokeStyle=NCSkin.yes; ctx.lineWidth=1.5; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(X(beU),Y(0)); ctx.lineTo(X(beU),Y(beY)); ctx.lineTo(pad,Y(beY)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=NCSkin.yes; ctx.beginPath(); ctx.arc(X(beU),Y(beY),6,0,2*Math.PI); ctx.fill();
+    ctx.fillStyle=NCSkin.ink; ctx.font="12px "+(NCSkin.mono||"monospace"); ctx.textAlign="left";
+    ctx.fillText("break-even", X(beU)+8, Y(beY)-8);
+
+    // legend + axis labels
+    ctx.font="12px "+(NCSkin.mono||"monospace");
+    ctx.fillStyle=NCSkin.accent; ctx.fillRect(pad,12,12,12);
+    ctx.fillStyle=NCSkin.ink; ctx.fillText("Revenue", pad+18,22);
+    ctx.fillStyle=NCSkin.inkSoft; ctx.fillRect(pad+100,12,12,12);
+    ctx.fillStyle=NCSkin.ink; ctx.fillText("Total cost", pad+118,22);
+    ctx.fillStyle=NCSkin.inkSoft; ctx.textAlign="center";
+    ctx.fillText("units sold", pad+W/2, Y(0)+34);
+  }
+
+  ["in-fixed_costs","in-variable_cost","in-price"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", update);
+  styleFields();
+  update();
+})();
+</script>

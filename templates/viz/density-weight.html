@@ -1,0 +1,132 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Volume
+      <span class="nc-field">
+        <input id="dw-vol" type="number" value="200" step="any" min="0">
+        <select id="dw-vu">
+          <option value="L" selected>L</option>
+          <option value="mL">mL</option>
+          <option value="m³">m³</option>
+          <option value="cm³">cm³</option>
+          <option value="US gal">US gal</option>
+          <option value="ft³">ft³</option>
+        </select>
+      </span>
+    </label>
+    <label>Material
+      <span class="nc-field">
+        <select id="dw-mat">
+          <option value="Water (fresh)" selected>Water (fresh)</option>
+          <option value="Seawater">Seawater</option>
+          <option value="Petrol/Gasoline">Petrol/Gasoline</option>
+          <option value="Diesel">Diesel</option>
+          <option value="Honey">Honey</option>
+          <option value="Steel">Steel</option>
+          <option value="Aluminium">Aluminium</option>
+          <option value="Oak (wood)">Oak (wood)</option>
+          <option value="Pine (wood)">Pine (wood)</option>
+          <option value="Concrete">Concrete</option>
+        </select>
+      </span>
+    </label>
+    <label>Weight unit
+      <span class="nc-field">
+        <select id="dw-wu">
+          <option value="kg" selected>kg</option>
+          <option value="g">g</option>
+          <option value="lb">lb</option>
+          <option value="t (metric)">t (metric)</option>
+        </select>
+      </span>
+    </label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="dw-chart" width="640" height="260"
+          style="margin-top:14px;width:100%;height:auto;max-width:640px"></canvas>
+  <p class="viz-caption" id="dw-cap" style="font-size:.9rem;margin-top:.5rem;opacity:.85"></p>
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="dw-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("dw-chart"), ctx = cv.getContext("2d");
+  let last = null;
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$("dw-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+  async function update(){
+    const body={ volume:+$("dw-vol").value, volume_unit:$("dw-vu").value, material:$("dw-mat").value, weight_unit:$("dw-wu").value };
+    let data;
+    try { const r=await fetch("/api/compute/{{ calc.slug }}",{method:"POST",
+            headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+          data=await r.json(); }
+    catch(e){ $("viz-out").textContent="compute error"; return; }
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("dw-disc").textContent = "⚠ " + data.disclaimer;
+    if (data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; ctx.clearRect(0,0,cv.width,cv.height); last=null; return; }
+    $("viz-out").innerHTML = `<b>${(Math.round(data.result*1e3)/1e3)}</b> ${data.result_unit}`;
+    try{ if(window.__ncExplain) window.__ncExplain(data.explanation); }catch(e){}
+    last=data; draw(data);
+  }
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const W=cv.width,H=cv.height,padL=120,padR=70,padT=14,padB=14;
+    // compare the SAME volume across a few reference materials (weight in kg)
+    const refs=[
+      ["Water",1000],["Petrol",745],["Aluminium",2700],["Steel",7850],[d.material,d.density]
+    ];
+    // base m³ from current input: kg = m3*density -> m3 = data.kilograms/data.density
+    const m3 = d.density>0 ? d.kilograms/d.density : 0;
+    const rows = refs.map(([name,rho])=>({name, kg:m3*rho, you:(name===d.material)}));
+    const maxKg=Math.max.apply(null, rows.map(r=>r.kg).concat([1]));
+    const bh=(H-padT-padB)/rows.length;
+    ctx.font="12px "+(NCSkin.sans||"sans-serif");
+    rows.forEach((r,i)=>{
+      const y=padT+i*bh+6, h=bh-12;
+      const w=(r.kg/maxKg)*(W-padL-padR);
+      ctx.fillStyle = r.you ? NCSkin.accent : NCSkin.paper2;
+      ctx.strokeStyle = r.you ? NCSkin.accent : NCSkin.inkSoft;
+      ctx.fillRect(padL,y,Math.max(1,w),h); ctx.strokeRect(padL,y,Math.max(1,w),h);
+      ctx.fillStyle=NCSkin.ink; ctx.textAlign="right";
+      ctx.fillText(r.name, padL-8, y+h/2+4);
+      ctx.textAlign="left";
+      ctx.fillText(`${(Math.round(r.kg*10)/10)} kg`, padL+Math.max(1,w)+6, y+h/2+4);
+    });
+    ctx.fillStyle=NCSkin.inkSoft; ctx.textAlign="left";
+    ctx.fillText("same volume, different materials", padL, H-2);
+  }
+  ["dw-vol","dw-vu","dw-mat","dw-wu"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last); });
+  styleFields(); update();
+})();
+</script>
+

@@ -1,0 +1,144 @@
+<link rel="stylesheet" href="/static/nclearn.css">
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>A (amplitude = loudness)
+      <span class="nc-field"><input id="tf-A" type="range" value="2" min="-5" max="5" step="0.5" style="width:140px"><span id="tf-Av" style="margin-left:6px"></span></span></label>
+    <label>B (frequency = pitch)
+      <span class="nc-field"><input id="tf-B" type="range" value="1" min="0.5" max="4" step="0.5" style="width:140px"><span id="tf-Bv" style="margin-left:6px"></span></span></label>
+    <label>C (phase, °)
+      <span class="nc-field"><input id="tf-C" type="range" value="0" min="-180" max="180" step="15" style="width:140px"><span id="tf-Cv" style="margin-left:6px"></span></span></label>
+    <label>D (vertical)
+      <span class="nc-field"><input id="tf-D" type="range" value="0" min="-3" max="3" step="0.5" style="width:140px"><span id="tf-Dv" style="margin-left:6px"></span></span></label>
+  </div>
+
+  <div class="viz-out" id="tf-out"></div>
+
+  <canvas id="tf-diagram" width="680" height="420"
+          style="display:block;width:100%;height:auto;max-width:600px;margin:10px auto 0"></canvas>
+  <p class="viz-caption" id="tf-cap" style="font-size:.85rem;text-align:center;margin-top:.4rem;opacity:.85"></p>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="tf-disc" style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const slug = "{{ calc.slug }}";
+  const P = "tf";
+  const panel = document.querySelector('.viz-panel[data-slug="'+slug+'"]');
+  let last = null;
+
+  function styleFields(){
+    if(!window.NCSkin || !panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      if(el.type==="range") return;
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  function buildBody(){
+    $("tf-Av").textContent=$("tf-A").value; $("tf-Bv").textContent=$("tf-B").value; $("tf-Cv").textContent=$("tf-C").value+"\u00b0"; $("tf-Dv").textContent=$("tf-D").value;
+    return { A:$("tf-A").value, B:$("tf-B").value, C:$("tf-C").value, D:$("tf-D").value };
+  }
+
+  async function update(){
+    
+    const body = buildBody();
+    let data;
+    try { const r=await fetch("/api/compute/"+slug,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $(P+"-out").textContent="compute error"; return; }
+    try { if(window.NCSteps) window.NCSteps.render(data.steps||[]); } catch(e){}
+    if (data.disclaimer) $(P+"-disc").textContent="\u26a0 "+data.disclaimer;
+    if (data.error){ $(P+"-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} drawDiagram(null); last=null; mountLearn(null); return; }
+    $(P+"-out").innerHTML = '<b>amplitude '+fmt(data.amplitude)+', period '+fmt(data.period_deg)+'\u00b0, phase '+fmt(data.phase_deg)+'\u00b0, midline '+fmt(data.midline)+'</b>';
+    try{ window.__ncExplain(data.explanation);}catch(e){}
+    last=data; drawDiagram(data); mountLearn(data);
+  }
+
+  function mountLearn(data){
+    if(!window.NCLearn) return;
+    NCLearn.mount({ slug:slug, panel:panel, data:data, drawFrame:(data?drawFrame:undefined) });
+  }
+
+  function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
+
+  // Shared auto-fit: given natural-coordinate points [{x,y},...] and the canvas,
+  // return a mapper m(p)->{x,y} that centres and scales them to fill the box
+  // (minus margin) so NOTHING ever clips, whatever the inputs. Y is flipped so
+  // positive-y is up in natural coords. Returns {map, scale}.
+  function fitPts(pts, W, H, margin){
+    margin = margin || 48;
+    let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+    pts.forEach(p=>{ minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x); minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y); });
+    const spanX=Math.max(1e-6,maxX-minX), spanY=Math.max(1e-6,maxY-minY);
+    const sc=Math.min((W-2*margin)/spanX, (H-2*margin)/spanY);
+    const cxN=(minX+maxX)/2, cyN=(minY+maxY)/2;
+    const map=(p)=>({ x: W/2 + (p.x-cxN)*sc, y: H/2 - (p.y-cyN)*sc });
+    return { map, scale:sc };
+  }
+
+
+  function drawDiagram(d){ drawWave(d, 1); }
+  function drawWave(d, partial){
+    const cv=$(P+"-diagram"); if(!cv) return; const ctx=cv.getContext("2d"); const s=window.NCSkin||{};
+    const ink=s.ink||"#222", accent=s.accent||"#b50", yes=s.yes||"#3a7", soft=s.inkSoft||"#777", rule=s.rule||"#ccc", paper2=s.paper2||"#eee";
+    const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H); const cy=H/2;
+    const x0=30,x1=W-20, xmax=720;
+    const cap=$(P+"-cap"); if(!d){ if(cap) cap.textContent=""; return; }
+    // AUTO-SCALE: pick yscale so the whole wave (|A|+|D|) fits with a margin,
+    // however large the amplitude. Never clips, never needs a slider cap.
+    const reach = Math.max(1, Math.abs(d.A)+Math.abs(d.D));
+    const yscale = (H/2 - 24) / reach;
+    function gx(a){ return x0+(a/xmax)*(x1-x0); }
+    function gy(v){ return cy - v*yscale; }
+    // axes + midline
+    ctx.strokeStyle=rule; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x0,cy); ctx.lineTo(x1,cy); ctx.stroke();
+    ctx.fillStyle=soft; ctx.font="10px "+(s.sans||"sans-serif"); ctx.textAlign="center"; [0,180,360,540,720].forEach(a=>ctx.fillText(a+"\u00b0",gx(a),H-6));
+    // midline (D)
+    ctx.strokeStyle=paper2; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.moveTo(x0,gy(d.D)); ctx.lineTo(x1,gy(d.D)); ctx.stroke(); ctx.setLineDash([]);
+    // baseline sine (faint)
+    ctx.strokeStyle=rule; ctx.lineWidth=1; ctx.beginPath();
+    for(let a=0;a<=xmax;a+=3){ const v=Math.sin(a*Math.PI/180); const X=gx(a),Y=gy(v); if(a===0)ctx.moveTo(X,Y); else ctx.lineTo(X,Y);} ctx.stroke();
+    // transformed wave up to partial
+    ctx.strokeStyle=accent; ctx.lineWidth=2.5; ctx.beginPath();
+    const upTo = xmax*partial;
+    for(let a=0;a<=upTo;a+=3){ const v=d.A*Math.sin((d.B*a+d.C)*Math.PI/180)+d.D; const X=gx(a),Y=gy(v); if(a===0)ctx.moveTo(X,Y); else ctx.lineTo(X,Y);} ctx.stroke();
+    ctx.fillStyle=ink; ctx.font="bold 13px "+(s.mono||"monospace"); ctx.textAlign="left";
+    ctx.fillText("y = "+fmt(d.A)+"\u00b7sin("+fmt(d.B)+"x"+(d.C>=0?"+":"")+fmt(d.C)+")"+(d.D>=0?"+":"")+fmt(d.D), x0+4, 16);
+    if(cap) cap.textContent="Think of a sound wave: A is the amplitude (louder = taller), B is the frequency (higher = higher-pitched, more waves squeezed in). Faint grey is plain sin x; the accent curve is your transformed wave. The graph auto-scales, so the amplitude has no real maximum \u2014 the wave just shrinks to fit.";
+  }
+
+
+  function drawFrame(ctx,t,d){ if(!d) return; drawWave(d, t<0.85? t/0.85 : 1); }
+
+  ["tf-A","tf-B","tf-C","tf-D"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  window.addEventListener("nc-theme-change", ()=>{ if(last) drawWave(last,1); });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });
+  styleFields();  update();
+})();
+</script>

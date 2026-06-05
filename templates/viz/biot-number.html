@@ -1,0 +1,65 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Heat transfer coeff h (W/m²·K)
+      <span class="nc-field"><input id="bi-h" type="number" value="50" step="any"></span>
+    </label>
+    <label>Characteristic length L (m)
+      <span class="nc-field"><input id="bi-L" type="number" value="0.05" step="any"></span>
+    </label>
+    <label>Solid conductivity kₛ (W/m·K)
+      <span class="nc-field"><input id="bi-ks" type="number" value="50" step="any"></span>
+    </label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <div id="bi-verdict" style="margin-top:10px;font-size:15px;line-height:1.6"></div>
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="bi-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  let explained=false;
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{ el.style.background=bg; el.style.color=NCSkin.ink; el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$("bi-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+    const v=$("bi-verdict"); if(v) v.style.color=NCSkin.ink;
+    styleExplain();
+  }
+  function styleExplain(){
+    const box=$("nc-explain-box"); if(!box) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  function renderExplain(items){
+    const box=$("nc-explain-box"); if(!box||!items||!items.length){ if(box)box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    styleExplain();
+  }
+  async function update(){
+    const body={ h:+$("bi-h").value, L:+$("bi-L").value, ks:+$("bi-ks").value };
+    let data;
+    try { const r=await fetch("/api/compute/{{ calc.slug }}",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $("viz-out").textContent="compute error"; return; }
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("bi-disc").textContent = "⚠ " + data.disclaimer;
+    if(!explained && data.explanation){ renderExplain(data.explanation); explained=true; }
+    if (data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; $("bi-verdict").innerHTML=""; return; }
+    const bi=data.result;
+    $("viz-out").innerHTML = `Bi = <b>${(Math.round(bi*1e4)/1e4)}</b> · <span style="color:${NCSkin.accent}">${data.regime}</span>`;
+    let verdict;
+    if(bi<0.1) verdict = "Bi &lt; 0.1 → the object heats/cools almost uniformly. The simple <b>lumped-capacitance</b> model is valid: treat the whole body as one temperature.";
+    else if(bi<=1) verdict = "0.1 ≤ Bi ≤ 1 → a moderate internal gradient. The lumped model is borderline; a more detailed analysis is safer.";
+    else verdict = "Bi &gt; 1 → strong internal gradients. The surface responds far faster than the core (think a thick roast: outside hot, centre still cold). You must model temperature varying through the body.";
+    $("bi-verdict").innerHTML = verdict;
+  }
+  ["bi-h","bi-L","bi-ks"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  window.addEventListener("nc-theme-change", styleFields);
+  styleFields(); update();
+})();
+</script>

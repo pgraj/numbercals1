@@ -1,0 +1,110 @@
+{# Loan EMI donut: principal vs total interest, with the EMI shown in the centre. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Loan amount<input id="in-amount" type="number" value="400000" step="1000" min="1"></label>
+    <label>Rate %<input id="in-rate_pct" type="number" value="6" step="0.1" min="0"></label>
+    <label>Months<input id="in-months" type="number" value="360" step="1" min="1"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="emi-chart" width="640" height="380" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="emi-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg;
+      el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px";
+      el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("emi-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = {
+      amount:+$("in-amount").value,
+      rate_pct:+$("in-rate_pct").value,
+      months:+$("in-months").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    if (window.NCSteps) window.NCSteps.render(data.steps || []);
+
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("emi-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height);
+      return;
+    }
+    $("viz-out").innerHTML =
+      `Monthly EMI: <b>${data.emi}</b> &nbsp; Total interest: <b>${data.total_interest}</b> ` +
+      `&nbsp; Total payment: <b>${data.total_payment}</b>`;
+    const pct = (data.total_interest/data.total_payment*100).toFixed(1);
+    $("emi-caption").innerHTML =
+      `The ring is everything you repay over the loan. The principal slice is what you ` +
+      `borrowed; the interest slice (${pct}% of the ring here) is the lender's charge. A ` +
+      `longer tenure or higher rate fattens the interest slice — watch it swell as you change the inputs.`;
+    draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const cx=cv.width/2, cy=cv.height/2+6, R=Math.min(cv.width,cv.height)/2-50, r0=R*0.58;
+    const total = d.principal + d.total_interest;
+    if(total<=0) return;
+    const segs=[
+      {label:"Principal", val:d.principal, col:NCSkin.inkSoft},
+      {label:"Interest",  val:d.total_interest, col:NCSkin.accent},
+    ];
+    let a0=-Math.PI/2;
+    segs.forEach(s=>{
+      const a1=a0+(s.val/total)*2*Math.PI;
+      ctx.beginPath();
+      ctx.moveTo(cx,cy);
+      ctx.arc(cx,cy,R,a0,a1);
+      ctx.closePath();
+      ctx.fillStyle=s.col; ctx.fill();
+      a0=a1;
+    });
+    // punch the hole
+    ctx.globalCompositeOperation="destination-out";
+    ctx.beginPath(); ctx.arc(cx,cy,r0,0,2*Math.PI); ctx.fill();
+    ctx.globalCompositeOperation="source-over";
+
+    // centre label = EMI
+    ctx.fillStyle=NCSkin.ink; ctx.textAlign="center";
+    ctx.font="13px "+(NCSkin.mono||"monospace");
+    ctx.fillText("EMI / month", cx, cy-8);
+    ctx.font="20px "+(NCSkin.mono||"monospace");
+    ctx.fillText(String(d.emi), cx, cy+16);
+
+    // legend
+    ctx.textAlign="left"; ctx.font="12px "+(NCSkin.mono||"monospace");
+    let ly=cv.height-34;
+    segs.forEach((s,i)=>{
+      ctx.fillStyle=s.col; ctx.fillRect(40, ly+i*18, 12,12);
+      ctx.fillStyle=NCSkin.ink;
+      ctx.fillText(`${s.label}: ${s.val.toLocaleString()}`, 58, ly+i*18+10);
+    });
+  }
+
+  ["in-amount","in-rate_pct","in-months"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", update);
+  styleFields();
+  update();
+})();
+</script>

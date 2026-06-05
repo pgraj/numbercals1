@@ -1,0 +1,94 @@
+{# ROI: two bars (invested vs current value) plus a large ROI % metric. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Cost of investment<input id="in-cost" type="number" value="1000" step="100" min="1"></label>
+    <label>Current value<input id="in-current_value" type="number" value="1250" step="100" min="0"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="roi-chart" width="640" height="380" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="roi-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg;
+      el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px";
+      el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("roi-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = { cost:+$("in-cost").value, current_value:+$("in-current_value").value };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("roi-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height);
+      return;
+    }
+    $("viz-out").innerHTML =
+      `ROI: <b>${data.roi_pct}%</b> &nbsp; Net profit: <b>${data.net_profit}</b>`;
+    const word = data.net_profit >= 0 ? "above" : "below";
+    $("roi-caption").innerHTML =
+      `The left bar is what you put in; the right bar is what it is worth now. The current-value ` +
+      `bar sits ${word} the invested bar, and that gap is your ${data.net_profit>=0?"profit":"loss"}. ` +
+      `ROI restates that gap as a percentage of the cost so investments of different sizes compare fairly.`;
+    draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const pad=50, W=cv.width-2*pad, H=cv.height-2*pad;
+    const maxV=Math.max(d.cost, d.current_value, 1);
+    const Y=v=>pad+H-(v/maxV)*H;
+    const bars=[
+      {label:"Invested", val:d.cost, col:NCSkin.inkSoft, x:pad+W*0.18},
+      {label:"Current value", val:d.current_value, col:NCSkin.accent, x:pad+W*0.55},
+    ];
+    const bw=W*0.22;
+    // baseline
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad,Y(0)); ctx.lineTo(pad+W,Y(0)); ctx.stroke();
+    bars.forEach(b=>{
+      ctx.fillStyle=b.col; ctx.fillRect(b.x, Y(b.val), bw, Y(0)-Y(b.val));
+      ctx.fillStyle=NCSkin.ink; ctx.textAlign="center";
+      ctx.font="12px "+(NCSkin.mono||"monospace");
+      ctx.fillText(b.label, b.x+bw/2, Y(0)+18);
+      ctx.fillText(String(b.val.toLocaleString()), b.x+bw/2, Y(b.val)-8);
+    });
+    // dashed line from invested level across, to highlight the gap
+    ctx.strokeStyle=NCSkin.yes; ctx.lineWidth=1.5; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(bars[0].x, Y(d.cost)); ctx.lineTo(bars[1].x+bw, Y(d.cost));
+    ctx.stroke(); ctx.setLineDash([]);
+
+    // big ROI metric
+    ctx.textAlign="right"; ctx.fillStyle=NCSkin.accent;
+    ctx.font="34px "+(NCSkin.mono||"monospace");
+    ctx.fillText(d.roi_pct+"%", cv.width-pad, pad+10);
+    ctx.fillStyle=NCSkin.inkSoft; ctx.font="12px "+(NCSkin.mono||"monospace");
+    ctx.fillText("ROI", cv.width-pad, pad+28);
+  }
+
+  ["in-cost","in-current_value"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", update);
+  styleFields();
+  update();
+})();
+</script>

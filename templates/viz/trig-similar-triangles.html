@@ -1,0 +1,127 @@
+<link rel="stylesheet" href="/static/nclearn.css">
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Triangle 1 — side a&#8321;
+      <span class="nc-field"><input id="st-a1" type="number" value="3" step="any"></span></label>
+    <label>Triangle 2 — matching side a&#8322;
+      <span class="nc-field"><input id="st-a2" type="number" value="6" step="any"></span></label>
+    <label>Triangle 1 — side b&#8321;
+      <span class="nc-field"><input id="st-b1" type="number" value="4" step="any"></span></label>
+  </div>
+
+  <div class="viz-out" id="st-out"></div>
+
+  <canvas id="st-diagram" width="640" height="320"
+          style="display:block;width:100%;height:auto;max-width:520px;margin:10px auto 0"></canvas>
+  <p class="viz-caption" id="st-cap" style="font-size:.85rem;text-align:center;margin-top:.4rem;opacity:.85"></p>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="st-disc" style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const slug = "{{ calc.slug }}";
+  const P = "st";
+  const panel = document.querySelector('.viz-panel[data-slug="'+slug+'"]');
+  let last = null;
+
+  function styleFields(){
+    if(!window.NCSkin || !panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      if(el.type==="range") return;
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  function buildBody(){
+    return { a1:$("st-a1").value, a2:$("st-a2").value, b1:$("st-b1").value };
+  }
+
+  async function update(){
+    
+    const body = buildBody();
+    let data;
+    try { const r=await fetch("/api/compute/"+slug,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $(P+"-out").textContent="compute error"; return; }
+    try { if(window.NCSteps) window.NCSteps.render(data.steps||[]); } catch(e){}
+    if (data.disclaimer) $(P+"-disc").textContent="\u26a0 "+data.disclaimer;
+    if (data.error){ $(P+"-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} drawDiagram(null); last=null; mountLearn(null); return; }
+    $(P+"-out").innerHTML = '<b>b\u2082 = '+data.result+'</b>  (scale \u00d7'+fmt(data.scale)+')';
+    try{ window.__ncExplain(data.explanation);}catch(e){}
+    last=data; drawDiagram(data); mountLearn(data);
+  }
+
+  function mountLearn(data){
+    if(!window.NCLearn) return;
+    NCLearn.mount({ slug:slug, panel:panel, data:data, drawFrame:(data?drawFrame:undefined) });
+  }
+
+  function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
+
+
+  function drawDiagram(d){
+    const cv=$(P+"-diagram"); if(!cv) return; const ctx=cv.getContext("2d"); const s=window.NCSkin||{};
+    const ink=s.ink||"#222", accent=s.accent||"#b50", yes=s.yes||"#3a7", soft=s.inkSoft||"#777", rule=s.rule||"#ccc";
+    const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H); const cap=$(P+"-cap");
+    if(!d){ if(cap) cap.textContent=""; return; }
+    drawPair(ctx,d,1,s,ink,accent,yes,soft,rule);
+    if(cap) cap.textContent="Both triangles share the same shape; corresponding sides keep the ratio "+fmt(d.scale)+".";
+  }
+  function drawPair(ctx,d,grow,s,ink,accent,yes,soft,rule){
+    // Triangle 1 (fixed) left, triangle 2 (scaled, optionally growing) right.
+    const u1=Math.min(120/Math.max(d.a1,d.b1,1), 26);
+    const baseScale = d.scale*grow;
+    const u2=u1; // same unit; triangle 2 sides are a1*scale etc, so it visibly scales
+    function tri(ox,oy,a,b,col,lab){
+      const Ax=ox,Ay=oy, Bx=ox+a, By=oy, Cx=ox, Cy=oy-b;
+      ctx.beginPath(); ctx.moveTo(Ax,Ay); ctx.lineTo(Bx,By); ctx.lineTo(Cx,Cy); ctx.closePath();
+      ctx.globalAlpha=.10; ctx.fillStyle=col; ctx.fill(); ctx.globalAlpha=1;
+      ctx.strokeStyle=col; ctx.lineWidth=2; ctx.stroke();
+      ctx.fillStyle=ink; ctx.font="12px "+(s.sans||"sans-serif"); ctx.textAlign="center";
+      ctx.fillText(lab.a, (Ax+Bx)/2, oy+16);
+      ctx.save(); ctx.translate(ox-12,(Ay+Cy)/2); ctx.rotate(-Math.PI/2); ctx.fillText(lab.b,0,0); ctx.restore();
+    }
+    tri(70, 250, d.a1*u1, d.b1*u1, ink, {a:"a\u2081="+fmt(d.a1), b:"b\u2081="+fmt(d.b1)});
+    tri(360, 250, d.a1*baseScale*u2, d.b1*baseScale*u2, yes,
+        {a:"a\u2082="+fmt(d.a2*grow), b:"b\u2082="+fmt(d.b2*grow)});
+  }
+
+
+  function drawFrame(ctx,t,d){ if(!d) return; const s=window.NCSkin||{};
+    const ink=s.ink||"#222", accent=s.accent||"#b50", yes=s.yes||"#3a7", soft=s.inkSoft||"#777", rule=s.rule||"#ccc";
+    ctx.clearRect(0,0,640,320);
+    const grow = 0.4 + 0.6*(t<0.5? t/0.5 : 1-(t-0.5)/0.5); // pulse triangle 2 up/down
+    drawPair(ctx,d,grow,s,ink,accent,yes,soft,rule);
+  }
+
+  ["st-a1","st-a2","st-b1"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });
+  styleFields();  update();
+})();
+</script>

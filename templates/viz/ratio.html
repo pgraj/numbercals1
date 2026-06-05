@@ -1,0 +1,57 @@
+{# Ratio squares with a plain-English caption. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>a<input id="in-a" type="number" value="12" step="1"></label>
+    <label>b<input id="in-b" type="number" value="18" step="1"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="ratio-chart" width="420" height="160" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="ratio-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("ratio-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = { a:+$("in-a").value, b:+$("in-b").value };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+    if (data.error){ $("viz-out").innerHTML = "<b>"+data.error+"</b>"; $("ratio-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height); return; }
+    $("viz-out").innerHTML = `Simplified ratio = <b>${data.simplified}</b>`;
+    $("ratio-caption").innerHTML =
+      `${$("in-a").value}:${$("in-b").value} reduces to <b>${data.simplified}</b> — ` +
+      `the same proportion using the smallest whole numbers. The two colours show ` +
+      `${data.a_simple} parts beside ${data.b_simple} parts.`;
+    draw(data.series);
+  }
+
+  function draw(series){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const cols=[NCSkin.accent, NCSkin.yes];
+    const totalTiles = series.reduce((s,p)=>s+p.value,0) || 1;
+    const unit = Math.max(8, Math.min(28, (cv.width-40)/totalTiles));
+    let px = 14;
+    series.forEach((p,i)=>{
+      for(let k=0;k<p.value;k++){
+        ctx.fillStyle=cols[i%cols.length];
+        ctx.fillRect(px, 50, unit-3, unit-3);
+        ctx.strokeStyle=NCSkin.rule; ctx.strokeRect(px, 50, unit-3, unit-3);
+        px += unit;
+      }
+      px += 12;
+    });
+    ctx.fillStyle=NCSkin.ink; ctx.font="14px "+(NCSkin.mono||"monospace");
+    ctx.fillText(series.map(s=>s.value).join(" : "), 14, 110);
+  }
+
+  ["in-a","in-b"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", update);
+  update();
+})();
+</script>

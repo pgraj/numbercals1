@@ -1,0 +1,76 @@
+{# Exponential y = a·b^x. Integer-power dots + caption. Feeds steps panel. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>a<input id="in-a" type="number" value="2" step="0.5"></label>
+    <label>base (b)<input id="in-base" type="number" value="3" step="0.5" min="0.0001"></label>
+    <label>x<input id="in-x" type="number" value="4" step="0.5"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="exp-chart" width="640" height="380" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="exp-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("exp-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = { a:+$("in-a").value, base:+$("in-base").value, x:+$("in-x").value };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    if (window.NCSteps) window.NCSteps.render(data.steps || []);
+
+    if (data.error){ $("viz-out").innerHTML = "<b>"+data.error+"</b>"; $("exp-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height); return; }
+    const a=$("in-a").value, b=$("in-base").value, x=$("in-x").value;
+    $("viz-out").innerHTML = `${a}·${b}<sup>${x}</sup> = <b>${data.result}</b>`;
+    const dir = (+b>1) ? "grows" : (+b<1 ? "decays toward zero" : "stays flat");
+    $("exp-caption").innerHTML =
+      `Each dot is one whole power of ${b}. Step right by 1 and the value is ` +
+      `<b>multiplied by ${b}</b>. Because it multiplies each step, the curve ${dir} ` +
+      `far faster than a straight line.`;
+    draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const pad=52, W=cv.width-2*pad, H=cv.height-2*pad;
+    const pts=d.series; if(!pts||!pts.length) return;
+    const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
+    const xMin=Math.min(...xs), xMax=Math.max(...xs);
+    let yMin=Math.min(...ys,0), yMax=Math.max(...ys,d.result);
+    if(yMin===yMax){ yMin-=1; yMax+=1; }
+    const X=x=>pad+((x-xMin)/(xMax-xMin))*W;
+    const Y=y=>pad+H-((y-yMin)/(yMax-yMin))*H;
+
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad,Y(0)); ctx.lineTo(pad+W,Y(0)); ctx.stroke();
+    if(xMin<0 && xMax>0){ ctx.beginPath(); ctx.moveTo(X(0),pad); ctx.lineTo(X(0),pad+H); ctx.stroke(); }
+
+    ctx.strokeStyle=NCSkin.accent; ctx.lineWidth=2.5; ctx.beginPath();
+    pts.forEach((p,i)=> i?ctx.lineTo(X(p.x),Y(p.y)):ctx.moveTo(X(p.x),Y(p.y)));
+    ctx.stroke();
+
+    ctx.font="11px "+(NCSkin.mono||"monospace");
+    (d.powers||[]).forEach(p=>{
+      ctx.fillStyle=NCSkin.inkSoft;
+      ctx.beginPath(); ctx.arc(X(p.x),Y(p.y),3.5,0,2*Math.PI); ctx.fill();
+      if (p.y < yMax*0.92) ctx.fillText(p.y, X(p.x)+5, Y(p.y)-5);
+    });
+
+    ctx.fillStyle=NCSkin.yes;
+    ctx.beginPath(); ctx.arc(X(d.x),Y(d.result),6,0,2*Math.PI); ctx.fill();
+    ctx.fillStyle=NCSkin.ink; ctx.font="13px "+(NCSkin.mono||"monospace");
+    ctx.fillText("("+d.x+", "+d.result+")", X(d.x)+9, Y(d.result)-9);
+  }
+
+  ["in-a","in-base","in-x"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", update);
+  update();
+})();
+</script>

@@ -1,0 +1,79 @@
+{# Interactive compound-interest growth chart. Inputs -> POST compute -> plot. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Principal (P)<input id="in-principal" type="number" value="1000" step="100" min="0"></label>
+    <label>Rate % (r)<input id="in-rate_pct" type="number" value="5" step="0.1" min="0"></label>
+    <label>Years (t)<input id="in-years" type="number" value="10" step="1" min="1" max="100"></label>
+    <label>Compounds/yr (n)<input id="in-n" type="number" value="12" step="1" min="1"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="ci-chart" width="640" height="320" style="margin-top:14px"></canvas>
+</div>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("ci-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = {
+      principal: +$("in-principal").value,
+      rate_pct:  +$("in-rate_pct").value,
+      years:     +$("in-years").value,
+      n:         +$("in-n").value,
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+      if (window.NCSteps) window.NCSteps.render(data.steps || []);
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+    $("viz-out").innerHTML =
+      `Future value <b>${data.future_value.toLocaleString()}</b> · ` +
+      `Interest earned <b>${data.interest_earned.toLocaleString()}</b>`;
+    draw(data.series, body.principal);
+  }
+
+  function draw(series, principal){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    if(!series || !series.length) return;
+    const padL=58, padB=30, padT=12, padR=12;
+    const W = cv.width-padL-padR, H = cv.height-padB-padT;
+    const xs = series.map(p=>p.year), ys = series.map(p=>p.balance);
+    const xMax = Math.max(...xs)||1, yMax = Math.max(...ys)||1, yMin = 0;
+    const X = x => padL + (x/xMax)*W;
+    const Y = y => padT + H - ((y-yMin)/(yMax-yMin))*H;
+
+    // axes
+    ctx.strokeStyle = NCSkin.rule; ctx.lineWidth=1; ctx.beginPath();
+    ctx.moveTo(padL, padT); ctx.lineTo(padL, padT+H); ctx.lineTo(padL+W, padT+H);
+    ctx.stroke();
+
+    // principal baseline (dotted)
+    ctx.strokeStyle = NCSkin.inkSoft; ctx.setLineDash([4,4]); ctx.beginPath();
+    ctx.moveTo(padL, Y(principal)); ctx.lineTo(padL+W, Y(principal)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // growth curve
+    ctx.strokeStyle = NCSkin.accent; ctx.lineWidth=2.5; ctx.beginPath();
+    series.forEach((p,i)=>{ const px=X(p.year), py=Y(p.balance);
+      i ? ctx.lineTo(px,py) : ctx.moveTo(px,py); });
+    ctx.stroke();
+
+    // labels
+    ctx.fillStyle = NCSkin.inkSoft; ctx.font = "12px " + (NCSkin.mono||"monospace");
+    ctx.textAlign="right";
+    ctx.fillText(Math.round(yMax).toLocaleString(), padL-6, Y(yMax)+4);
+    ctx.fillText(Math.round(principal).toLocaleString(), padL-6, Y(principal)+4);
+    ctx.textAlign="center";
+    ctx.fillText("0 yr", X(0), padT+H+18);
+    ctx.fillText(xMax + " yr", X(xMax), padT+H+18);
+  }
+
+  ["in-principal","in-rate_pct","in-years","in-n"].forEach(id =>
+    $(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", update);  // recolour on theme switch
+  update();
+})();
+</script>

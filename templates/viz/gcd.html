@@ -1,0 +1,57 @@
+{# GCD tiling with a plain-English caption. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>a<input id="in-a" type="number" value="48" step="1"></label>
+    <label>b<input id="in-b" type="number" value="36" step="1"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="gcd-chart" width="460" height="180" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="gcd-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("gcd-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = { a:+$("in-a").value, b:+$("in-b").value };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+    if (data.error){ $("viz-out").innerHTML = "<b>"+data.error+"</b>"; $("gcd-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height); return; }
+    const a=$("in-a").value, b=$("in-b").value;
+    $("viz-out").innerHTML = `GCD(${a}, ${b}) = <b>${data.gcd}</b>`;
+    $("gcd-caption").innerHTML =
+      `Both rows are built from the same tile of size <b>${data.gcd}</b>. ` +
+      `That tile is the largest one that fits into ${a} and ${b} exactly — ` +
+      `the greatest common divisor.`;
+    draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const g=d.gcd||1, nums=d.numbers||[], cols=[NCSkin.accent, NCSkin.yes];
+    let py=14;
+    nums.forEach((n,i)=>{
+      const tiles=Math.max(1, Math.round(n/g));
+      const side=Math.max(6, Math.min(22, (cv.width-60)/tiles));
+      for(let k=0;k<tiles;k++){
+        ctx.fillStyle=cols[i%cols.length];
+        ctx.fillRect(14+k*side, py, side-2, side-2);
+        ctx.strokeStyle=NCSkin.rule; ctx.strokeRect(14+k*side, py, side-2, side-2);
+      }
+      ctx.fillStyle=NCSkin.inkSoft; ctx.font="12px "+(NCSkin.mono||"monospace");
+      ctx.fillText(n+" = "+tiles+"×"+g, 14, py+side+12);
+      py += side + 30;
+    });
+  }
+
+  ["in-a","in-b"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", update);
+  update();
+})();
+</script>

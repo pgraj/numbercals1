@@ -1,0 +1,73 @@
+{# Logarithm y = log_base(x). Traced reading + caption. Feeds steps panel. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>value (x)<input id="in-value" type="number" value="8" step="1" min="0.0001"></label>
+    <label>base<input id="in-base" type="number" value="2" step="1" min="0.0001"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="log-chart" width="640" height="380" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="log-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("log-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = { value:+$("in-value").value, base:+$("in-base").value };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    if (window.NCSteps) window.NCSteps.render(data.steps || []);
+
+    if (data.error){ $("viz-out").innerHTML = "<b>"+data.error+"</b>"; $("log-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height); return; }
+    const v=$("in-value").value, b=$("in-base").value, res=data.result;
+    $("viz-out").innerHTML = `log<sub>${b}</sub>(${v}) = <b>${res}</b>`;
+    $("log-caption").innerHTML =
+      `Go up from <b>x = ${v}</b> to the curve, then across to the y-axis — you land ` +
+      `on <b>${res}</b>. That is the power you raise <b>${b}</b> to in order to get <b>${v}</b>.`;
+    draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const pad=46, W=cv.width-2*pad, H=cv.height-2*pad;
+    const pts=d.series; if(!pts||!pts.length) return;
+    const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
+    const xMin=0, xMax=Math.max(...xs);
+    let yMin=Math.min(...ys,0), yMax=Math.max(...ys,d.result);
+    if(yMin===yMax){ yMin-=1; yMax+=1; }
+    const X=x=>pad+((x-xMin)/(xMax-xMin))*W;
+    const Y=y=>pad+H-((y-yMin)/(yMax-yMin))*H;
+
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad,Y(0)); ctx.lineTo(pad+W,Y(0)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X(0),pad); ctx.lineTo(X(0),pad+H); ctx.stroke();
+
+    ctx.strokeStyle=NCSkin.accent; ctx.lineWidth=2.5; ctx.beginPath();
+    pts.forEach((p,i)=> i?ctx.lineTo(X(p.x),Y(p.y)):ctx.moveTo(X(p.x),Y(p.y)));
+    ctx.stroke();
+
+    const vx=d.value, vy=d.result;
+    ctx.strokeStyle=NCSkin.inkSoft; ctx.lineWidth=1.5; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(X(vx),Y(0)); ctx.lineTo(X(vx),Y(vy)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X(vx),Y(vy)); ctx.lineTo(X(0),Y(vy)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle=NCSkin.yes;
+    ctx.beginPath(); ctx.arc(X(vx),Y(vy),6,0,2*Math.PI); ctx.fill();
+    ctx.fillStyle=NCSkin.ink; ctx.font="13px "+(NCSkin.mono||"monospace");
+    ctx.fillText("x = "+vx, X(vx)+6, Y(0)-8);
+    ctx.fillText("log = "+vy, X(0)+8, Y(vy)-8);
+  }
+
+  ["in-value","in-base"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", update);
+  update();
+})();
+</script>

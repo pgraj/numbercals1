@@ -1,0 +1,125 @@
+{# Body-fat donut: fat mass vs lean mass as two arcs of total weight. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Sex
+      <select id="in-sex">
+        <option value="male">Male</option><option value="female">Female</option><option value="other">Other</option>
+      </select>
+    </label>
+    <label>Weight
+      <span class="nc-field">
+        <input id="in-weight" type="number" value="80" step="0.5" min="0">
+        <select id="u-weight"><option value="kg">kg</option><option value="lb">lb</option></select>
+      </span>
+    </label>
+    <label>Height
+      <span class="nc-field">
+        <input id="in-height" type="number" value="70" step="0.25" min="0">
+        <select id="u-height">
+          <option value="in">in</option><option value="cm">cm</option>
+          <option value="m">m</option><option value="ft">ft + in</option>
+        </select>
+        <input id="in-height2" type="number" value="0" step="0.25" min="0"
+               style="display:none;width:5.5em" placeholder="in" title="inches">
+      </span>
+    </label>
+  </div>
+  <fieldset style="margin-top:10px;border:1px solid;border-radius:8px;padding:8px 12px" id="circ-group">
+    <legend style="font-size:.85rem;padding:0 6px">Circumferences
+      <select id="u-length" style="margin-left:4px"><option value="in">inches</option><option value="cm">cm</option></select>
+      <span style="opacity:.65">— one unit for all three</span>
+    </legend>
+    <div class="viz-inputs" style="margin:0">
+      <label>Waist<input id="in-waist" type="number" value="34" step="0.25" min="0"></label>
+      <label>Neck<input id="in-neck" type="number" value="15" step="0.25" min="0"></label>
+      <label id="hip-label">Hip<input id="in-hip" type="number" value="38" step="0.25" min="0"></label>
+    </div>
+  </fieldset>
+  <p style="font-size:.82rem;opacity:.7;margin:.4rem 0 0">Hip is used for the female formula.</p>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="bf-chart" width="640" height="320" style="margin-top:14px;width:100%;height:auto;max-width:640px"></canvas>
+  <p class="viz-caption" id="bf-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+  <p class="viz-disclaimer" id="bf-disc" style="font-size:.82rem;line-height:1.5;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+<script>
+(function(){
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg; el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule; el.style.borderRadius = "6px"; el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+    const disc = document.getElementById("bf-disc");
+    if(disc){ disc.style.background = NCSkin.paper2; disc.style.color = NCSkin.inkSoft; disc.style.border = "1px solid " + NCSkin.rule; }
+    const grp = document.getElementById("circ-group");
+    if(grp){ grp.style.borderColor = NCSkin.rule; grp.style.color = NCSkin.ink; }
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("bf-chart"), ctx = cv.getContext("2d");
+  let last = null;
+  function syncHip(){ $("hip-label").style.display = ($("in-sex").value==="male")?"none":""; }
+  function syncHeightUnit(){ $("in-height2").style.display = ($("u-height").value==="ft")?"":"none"; }
+
+  async function update(){
+    syncHip(); syncHeightUnit();
+    const body = {
+      sex:$("in-sex").value,
+      weight_kg:+$("in-weight").value, weight_unit:$("u-weight").value,
+      height_in:+$("in-height").value, height_unit:$("u-height").value, height_in2:+$("in-height2").value,
+      waist_in:+$("in-waist").value, neck_in:+$("in-neck").value, hip_in:+$("in-hip").value,
+      length_unit:$("u-length").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    try { if (window.NCSteps) window.NCSteps.render(data.steps || []); } catch(e){}
+    if (data.disclaimer) $("bf-disc").textContent = "⚠ " + data.disclaimer;
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("bf-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height); last=null; return;
+    }
+    $("viz-out").innerHTML =
+      `Body fat: <b>${data.body_fat_pct}%</b> &nbsp; Fat mass: <b>${data.fat_mass_kg} kg</b> ` +
+      `&nbsp; Lean mass: <b>${data.lean_mass_kg} kg</b>`;
+    $("bf-caption").innerHTML =
+      `The ring is your whole body weight. The coloured arc is fat mass (<b>${data.body_fat_pct}%</b>) ` +
+      `and the rest is lean mass — muscle, bone, organs and water.`;
+    last = data; draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const cx=cv.width/2, cy=cv.height/2, R=110, r=66;
+    const fatFrac = d.body_fat_pct/100;
+    const start = -Math.PI/2, fatEnd = start + fatFrac*2*Math.PI;
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI); ctx.arc(cx,cy,r,2*Math.PI,0,true);
+    ctx.fillStyle = NCSkin.yes; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx,cy,R,start,fatEnd); ctx.arc(cx,cy,r,fatEnd,start,true);
+    ctx.closePath(); ctx.fillStyle = NCSkin.accent; ctx.fill();
+    ctx.fillStyle = NCSkin.ink; ctx.textAlign="center";
+    ctx.font = "bold 26px "+(NCSkin.mono||"monospace"); ctx.fillText(d.body_fat_pct+"%", cx, cy-2);
+    ctx.font = "12px "+(NCSkin.mono||"monospace"); ctx.fillStyle = NCSkin.inkSoft; ctx.fillText("body fat", cx, cy+18);
+    ctx.textAlign="left"; ctx.font="12px "+(NCSkin.mono||"monospace");
+    const lx = cx+R+24, ly = cy-20;
+    ctx.fillStyle=NCSkin.accent; ctx.fillRect(lx,ly,12,12);
+    ctx.fillStyle=NCSkin.ink; ctx.fillText("Fat "+d.fat_mass_kg+" kg", lx+18, ly+10);
+    ctx.fillStyle=NCSkin.yes; ctx.fillRect(lx,ly+24,12,12);
+    ctx.fillStyle=NCSkin.ink; ctx.fillText("Lean "+d.lean_mass_kg+" kg", lx+18, ly+34);
+  }
+
+  ["in-sex","in-weight","u-weight","in-height","u-height","in-height2","u-length","in-waist","in-neck","in-hip"].forEach(id=>{
+    const el=$(id); el.addEventListener("input", update); el.addEventListener("change", update);
+  });
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last); });
+  styleFields(); syncHip(); syncHeightUnit();
+  update();
+})();
+</script>

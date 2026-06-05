@@ -1,0 +1,99 @@
+{# CAGR: smooth compounding curve at the constant CAGR rate, endpoints pinned. #}
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div class="viz-inputs">
+    <label>Beginning value<input id="in-begin_value" type="number" value="10000" step="500" min="1"></label>
+    <label>Ending value<input id="in-end_value" type="number" value="16000" step="500" min="1"></label>
+    <label>Years<input id="in-years" type="number" value="4" step="1" min="1"></label>
+  </div>
+  <div class="viz-out" id="viz-out"></div>
+  <canvas id="cagr-chart" width="640" height="380" style="margin-top:14px;max-width:100%"></canvas>
+  <p class="viz-caption" id="cagr-caption" style="font-size:.9rem;line-height:1.5;margin-top:.5rem;opacity:.85"></p>
+</div>
+<script>
+(function(){
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="{{ calc.slug }}"]');
+    if(!panel) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background = bg;
+      el.style.color = NCSkin.ink;
+      el.style.border = "1px solid " + NCSkin.rule;
+      el.style.borderRadius = "6px";
+      el.style.padding = "4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color = NCSkin.ink; });
+  }
+  const $ = id => document.getElementById(id);
+  const cv = $("cagr-chart"), ctx = cv.getContext("2d");
+
+  async function update(){
+    const body = {
+      begin_value:+$("in-begin_value").value,
+      end_value:+$("in-end_value").value,
+      years:+$("in-years").value
+    };
+    let data;
+    try {
+      const r = await fetch("/api/compute/{{ calc.slug }}", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(body)});
+      data = await r.json();
+    } catch(e){ $("viz-out").textContent = "compute error"; return; }
+
+    if (window.NCSteps) window.NCSteps.render(data.steps || []);
+
+    if (data.error){
+      $("viz-out").innerHTML = "<b>"+data.error+"</b>";
+      $("cagr-caption").textContent=""; ctx.clearRect(0,0,cv.width,cv.height);
+      return;
+    }
+    $("viz-out").innerHTML = `CAGR: <b>${data.cagr_pct}%</b> per year`;
+    $("cagr-caption").innerHTML =
+      `The curve is the steady path your money would take if it grew by exactly ` +
+      `${data.cagr_pct}% every year. Its ends are pinned to your real start and finish values; ` +
+      `the gentle upward bend in between is compounding — each year's growth sits on top of the last.`;
+    draw(data);
+  }
+
+  function draw(d){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const pad=52, W=cv.width-2*pad, H=cv.height-2*pad;
+    const pts=d.series; if(!pts||!pts.length) return;
+    const xs=pts.map(p=>p.year), ys=pts.map(p=>p.value);
+    const xMin=Math.min(...xs), xMax=Math.max(...xs)||1;
+    const yMin=Math.min(...ys,0), yMax=Math.max(...ys)*1.05;
+    const X=x=>pad+((x-xMin)/((xMax-xMin)||1))*W;
+    const Y=y=>pad+H-((y-yMin)/((yMax-yMin)||1))*H;
+
+    // axes
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad,Y(yMin)); ctx.lineTo(pad+W,Y(yMin)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad,pad); ctx.lineTo(pad,pad+H); ctx.stroke();
+
+    // smooth curve
+    ctx.strokeStyle=NCSkin.accent; ctx.lineWidth=2.5; ctx.beginPath();
+    pts.forEach((p,i)=> i?ctx.lineTo(X(p.year),Y(p.value)):ctx.moveTo(X(p.year),Y(p.value)));
+    ctx.stroke();
+
+    // endpoints marked
+    [pts[0], pts[pts.length-1]].forEach((p,idx)=>{
+      ctx.fillStyle=NCSkin.yes;
+      ctx.beginPath(); ctx.arc(X(p.year),Y(p.value),6,0,2*Math.PI); ctx.fill();
+      ctx.fillStyle=NCSkin.ink; ctx.font="12px "+(NCSkin.mono||"monospace");
+      ctx.textAlign = idx?"right":"left";
+      ctx.fillText(p.value.toLocaleString(), X(p.year)+(idx?-8:8), Y(p.value)-10);
+    });
+    // x labels
+    ctx.fillStyle=NCSkin.inkSoft; ctx.textAlign="center"; ctx.font="11px "+(NCSkin.mono||"monospace");
+    pts.forEach(p=> ctx.fillText("yr "+p.year, X(p.year), Y(yMin)+16));
+  }
+
+  ["in-begin_value","in-end_value","in-years"].forEach(id=>$(id).addEventListener("input", update));
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", update);
+  styleFields();
+  update();
+})();
+</script>
