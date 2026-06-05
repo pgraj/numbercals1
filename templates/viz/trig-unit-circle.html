@@ -1,8 +1,9 @@
 <link rel="stylesheet" href="/static/nclearn.css">
 <div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
   <div class="viz-inputs">
-    <label>Angle θ (degrees)
-      <span class="nc-field"><input id="uc-deg" type="number" value="60" step="any"></span>
+    <label><span style="display:block;white-space:nowrap">Angle &theta; <span id="uc-unit-lbl" style="opacity:.7">(deg)</span></span>
+      <span class="nc-field" style="display:block"><input id="uc-deg" type="number" value="60" step="any"></span>
     </label>
     <label>Drag
       <span class="nc-field"><input id="uc-range" type="range" value="60" min="0" max="360" step="1" style="width:200px"></span>
@@ -38,6 +39,8 @@
 })();
 </script>
 
+<script src="/static/ncangle.js"></script>
+
 <script>
 (function(){
   const $ = id => document.getElementById(id);
@@ -57,8 +60,10 @@
     const d=$("uc-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
   }
 
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
+
   async function update(){
-    const body = { angle_deg: $("uc-deg").value };
+    const body = { angle_deg: $("uc-deg").value, angle_unit: unit() };
     let data;
     try { const r=await fetch("/api/compute/"+slug,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
     catch(e){ $("uc-out").textContent="compute error"; return; }
@@ -110,7 +115,9 @@
     ctx.font="13px "+(s.sans||"sans-serif"); ctx.textAlign="center";
     ctx.fillStyle=accent; ctx.fillText("cos θ = "+fmt(d.cos), (cx+px)/2, cy+(Math.sin(th)>=0?16:-8));
     ctx.fillStyle=yes; ctx.save(); ctx.translate(px+(Math.cos(th)>=0?14:-14),(cy+py)/2); ctx.rotate(-Math.PI/2); ctx.fillText("sin θ = "+fmt(d.sin),0,0); ctx.restore();
-    ctx.fillStyle=ink; ctx.font="bold 13px "+(s.sans||"sans-serif"); ctx.textAlign="left"; ctx.fillText("θ="+fmt(angDeg)+"°", cx+30, cy-6);
+    ctx.fillStyle=ink; ctx.font="bold 13px "+(s.sans||"sans-serif"); ctx.textAlign="left";
+    var angLbl = (unit()==="rad") ? (fmt(angDeg*Math.PI/180)+" rad") : (fmt(angDeg)+"\u00b0");
+    ctx.fillText("\u03b8="+angLbl, cx+30, cy-6);
     // readout panel on the right
     let rx=430, ry=cy-90;
     ctx.textAlign="left"; ctx.font="14px "+(s.mono||"monospace");
@@ -129,13 +136,38 @@
 
   function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
 
-  function syncDeg(){ const v=Math.max(0,Math.min(360,Math.round(+$("uc-deg").value||0))); $("uc-range").value=v; }
-  function syncRange(){ $("uc-deg").value=$("uc-range").value; }
+  // The range slider always works in degrees (0–360). The number field shows
+  // the chosen unit, so convert between them as needed.
+  function fieldToDeg(){
+    const v = +$("uc-deg").value || 0;
+    return (unit()==="rad") ? v*180/Math.PI : v;
+  }
+  function syncDeg(){ const d=Math.max(0,Math.min(360,Math.round(fieldToDeg()))); $("uc-range").value=d; }
+  function syncRange(){
+    const d = +$("uc-range").value;
+    $("uc-deg").value = (unit()==="rad") ? +(d*Math.PI/180).toFixed(4) : d;
+  }
+
+  function syncUnitLabel(){
+    $("uc-unit-lbl").textContent = (unit()==="rad") ? "(rad)" : "(deg)";
+  }
 
   $("uc-deg").addEventListener("input", ()=>{ syncDeg(); update(); });
   $("uc-range").addEventListener("input", ()=>{ syncRange(); update(); });
+
+  if(window.NCAngle){
+    NCAngle.onChange(function(newUnit){
+      const v = parseFloat($("uc-deg").value);
+      if(!isNaN(v)){
+        if(newUnit==="rad") $("uc-deg").value = +(v*Math.PI/180).toFixed(4);  // was deg
+        else                $("uc-deg").value = +(v*180/Math.PI).toFixed(4);  // was rad
+      }
+      syncUnitLabel(); update();
+    });
+  }
+
   window.addEventListener("nc-theme-change", styleFields);
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawAt(last, last.angle_norm); });
-  styleFields(); syncDeg(); update();
+  styleFields(); syncUnitLabel(); syncDeg(); update();
 })();
 </script>

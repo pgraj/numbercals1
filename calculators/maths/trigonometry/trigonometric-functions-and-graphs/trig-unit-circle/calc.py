@@ -4,6 +4,11 @@ For any angle, give the point (cos θ, sin θ) on the unit circle, the quadrant,
 the reference angle, and exact surd values at the special angles. This is the
 pivot concept: it links right-angle ratios (Stage 1) to the wave graphs and to
 Stage 3's identities.
+
+Accepts `angle_unit` ("deg"|"rad"): θ is READ in the chosen unit and DISPLAYED in
+it (the step angle, the reference angle, and the result echo), while the geometry
+and exact-value lookup work internally in degrees. The unit circle is where
+radians is most naturally taught, so the toggle matters here.
 """
 import math
 
@@ -47,8 +52,9 @@ _EXACT = {
     summary=(
         "Explore the unit circle: for any angle it gives the point (cos theta, "
         "sin theta), the quadrant and reference angle, and exact surd values at "
-        "the special angles, with an animated point whose sine and cosine "
-        "projections are drawn live alongside the right-triangle interpretation."
+        "the special angles, in degrees or radians, with an animated point whose "
+        "sine and cosine projections are drawn live alongside the right-triangle "
+        "interpretation."
     ),
     formula="P = (cos θ, sin θ) on the circle of radius 1",
     tags=[
@@ -59,11 +65,15 @@ _EXACT = {
     ],
     viz_template="viz/trig-unit-circle.html",
 )
-def compute(angle_deg=None):
+def compute(angle_deg=None, angle_unit="deg"):
     try:
+        unit = "rad" if str(angle_unit) == "rad" else "deg"
         if angle_deg is None or angle_deg == "":
-            return _err("Enter an angle in degrees.")
-        a = float(angle_deg)
+            lim = "in degrees" if unit == "deg" else "in radians"
+            return _err("Enter an angle %s." % lim)
+        a_in = float(angle_deg)
+        # interpret the entered angle in the chosen unit; work in degrees inside
+        a = a_in if unit == "deg" else math.degrees(a_in)
         th = math.radians(a)
         cos_v = math.cos(th)
         sin_v = math.sin(th)
@@ -88,7 +98,7 @@ def compute(angle_deg=None):
 
         steps = [
             {"label": "Place the angle on the circle",
-             "math": r"\(\theta = %s^\circ\)" % _fmt(a),
+             "math": r"\(\theta = %s\)" % _ang(a, unit),
              "note": "Measured anticlockwise from the positive x-axis on a circle of radius 1."},
             {"label": "Read the coordinates",
              "math": r"\(P = (\cos\theta,\ \sin\theta) = (%s,\ %s)\)" % (_fmt(cos_v), _fmt(sin_v)),
@@ -109,11 +119,14 @@ def compute(angle_deg=None):
             "result": "(%s, %s)" % (_fmt(cos_v), _fmt(sin_v)),
             "angle": a,
             "angle_norm": a_norm,
+            "angle_unit": unit,
+            "angle_display": _disp(a, unit),
             "cos": round(cos_v, 6),
             "sin": round(sin_v, 6),
             "tan": (round(tan_v, 6) if tan_v is not None else None),
             "quadrant": quadrant,
             "reference": round(ref, 4),
+            "reference_display": _disp(ref, unit),
             "steps": steps,
             "explanation": [
                 {"heading": "Why the circle has radius 1",
@@ -121,6 +134,11 @@ def compute(angle_deg=None):
                          "angle has a hypotenuse of 1, so the opposite side equals "
                          "sin θ and the adjacent side equals cos θ directly. The "
                          "point on the circle is therefore exactly (cos θ, sin θ)."},
+                {"heading": "Degrees and radians",
+                 "body": "The unit circle is where radians come into their own: a "
+                         "full turn is 2π radians, a right angle is π/2, and the arc "
+                         "length equals the angle in radians. Switch the toggle to "
+                         "see the same point described either way."},
                 {"heading": "Beyond the first quadrant",
                  "body": "Unlike right-angle trig, the unit circle defines sine and "
                          "cosine for every angle, including those past 90° and "
@@ -130,7 +148,22 @@ def compute(angle_deg=None):
             "disclaimer": DISCLAIMER,
         }
     except (TypeError, ValueError):
-        return _err("Please enter a valid number of degrees.")
+        lim = "degrees" if unit == "deg" else "radians"
+        return _err("Please enter a valid number of %s." % lim)
+
+
+def _ang(deg, unit):
+    """LaTeX angle in the chosen unit (for step math)."""
+    if unit == "rad":
+        return _fmt(math.radians(deg)) + r"\,\text{rad}"
+    return _fmt(deg) + r"^\circ"
+
+
+def _disp(deg, unit):
+    """Plain-text angle in the chosen unit."""
+    if unit == "rad":
+        return _fmt(math.radians(deg)) + " rad"
+    return _fmt(deg) + "\u00b0"
 
 
 def _err(msg):
