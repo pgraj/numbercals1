@@ -11,7 +11,9 @@ register_faqs("trig-sine-rule-area", [
           "cosine rules."},
     {"q": "Can you give a worked example?",
      "a": "With a = 8, b = 11, and the included angle C = 37°: Area = ½·8·11·sin "
-          "37° ≈ 44·0.602 ≈ 26.5 square units."},
+          "37° ≈ 44·0.602 ≈ 26.5 square units. The same angle in radians is "
+          "37° ≈ 0.6458 rad; flip the Degrees/Radians toggle and the working "
+          "updates to match."},
     {"q": "Which angle do I use?",
      "a": "Always the angle enclosed by the two sides you chose. With standard "
           "labelling, sides a and b enclose angle C; if you use sides b and c, the "

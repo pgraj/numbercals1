@@ -1,12 +1,13 @@
 <link rel="stylesheet" href="/static/nclearn.css">
 <div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
   <div class="viz-inputs">
     <label>Side a
       <span class="nc-field"><input id="sa-a" type="number" value="8" step="any"></span></label>
     <label>Side b
       <span class="nc-field"><input id="sa-b" type="number" value="11" step="any"></span></label>
-    <label>Included angle C (°)
-      <span class="nc-field"><input id="sa-C" type="number" value="37" step="any"></span></label>
+    <label id="sa-C-l"><span style="display:block;white-space:nowrap">Incl angle C <span id="sa-unit-lbl" style="opacity:.7">(deg)</span></span>
+      <span class="nc-field" style="display:block"><input id="sa-C" type="number" value="37" step="any"></span></label>
   </div>
 
   <div class="viz-out" id="sa-out"></div>
@@ -38,6 +39,8 @@
 })();
 </script>
 
+<script src="/static/ncangle.js"></script>
+
 <script>
 (function(){
   const $ = id => document.getElementById(id);
@@ -58,8 +61,10 @@
     const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
   }
 
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
+
   function buildBody(){
-    return { a:$("sa-a").value, b:$("sa-b").value, angle_C:$("sa-C").value };
+    return { a:$("sa-a").value, b:$("sa-b").value, angle_C:$("sa-C").value, angle_unit:unit() };
   }
 
   async function update(){
@@ -127,9 +132,25 @@
 
   function drawFrame(ctx,t,d){ if(!d) return; drawArea(d, 0.3+0.7*(t<0.5? t/0.5 : 1-(t-0.5)/0.5)); }
 
+  function syncUnitLabel(){
+    $("sa-unit-lbl").textContent = (unit()==="rad") ? "(rad)" : "(deg)";
+  }
+
   ["sa-a","sa-b","sa-C"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+
+  if(window.NCAngle){
+    NCAngle.onChange(function(newUnit){
+      const v = parseFloat($("sa-C").value);
+      if(!isNaN(v)){
+        if(newUnit==="rad") $("sa-C").value = +(v*Math.PI/180).toFixed(4);
+        else                $("sa-C").value = +(v*180/Math.PI).toFixed(4);
+      }
+      syncUnitLabel(); update();
+    });
+  }
+
   window.addEventListener("nc-theme-change", styleFields);
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });
-  styleFields();  update();
+  styleFields(); syncUnitLabel(); update();
 })();
 </script>

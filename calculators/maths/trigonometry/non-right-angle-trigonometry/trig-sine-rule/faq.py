@@ -10,7 +10,9 @@ register_faqs("trig-sine-rule", [
           "non-included angle (SSA)."},
     {"q": "Can you give a worked example?",
      "a": "With a = 7 opposite A = 30°, to find b opposite B = 45°: b = a·sin B / "
-          "sin A = 7·sin 45° / sin 30° ≈ 9.90."},
+          "sin A = 7·sin 45° / sin 30° ≈ 9.90. The same angles in radians are "
+          "30° ≈ 0.5236 rad and 45° ≈ 0.7854 rad; the Degrees/Radians toggle "
+          "switches the inputs and the working."},
     {"q": "What is the ambiguous case?",
      "a": "When finding an angle from two sides and a non-included angle (SSA), "
           "the inverse sine can give two valid answers — an acute angle and its "

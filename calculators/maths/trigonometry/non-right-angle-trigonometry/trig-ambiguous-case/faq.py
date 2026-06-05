@@ -10,7 +10,9 @@ register_faqs("trig-ambiguous-case", [
           "under 180°, both produce a genuine triangle."},
     {"q": "Can you give a worked example?",
      "a": "With a = 6, b = 8, and A = 30°: sin B = 8·sin 30° / 6 ≈ 0.667, giving "
-          "B ≈ 41.8° or B ≈ 138.2°. Both fit, so there are two triangles."},
+          "B ≈ 41.8° or B ≈ 138.2°. Both fit, so there are two triangles. In "
+          "radians, A = 30° ≈ 0.5236 rad; the Degrees/Radians toggle switches the "
+          "input and every angle in the working."},
     {"q": "How do I know how many triangles there are?",
      "a": "If the computed sine exceeds 1, no triangle exists. If only the acute "
           "angle keeps the total under 180°, there is one. If both the acute and "

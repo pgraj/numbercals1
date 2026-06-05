@@ -1,14 +1,15 @@
 <link rel="stylesheet" href="/static/nclearn.css">
 <div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
   <div class="viz-inputs">
     <label>Find
       <span class="nc-field"><select id="sr-mode"><option value="side" selected>A side</option><option value="angle">An angle</option></select></span></label>
     <label>Known side
       <span class="nc-field"><input id="sr-ks" type="number" value="7" step="any"></span></label>
-    <label>Its opposite angle (°)
-      <span class="nc-field"><input id="sr-ka" type="number" value="30" step="any"></span></label>
-    <label id="sr-oa-l">Angle opposite wanted side (°)
-      <span class="nc-field"><input id="sr-oa" type="number" value="45" step="any"></span></label>
+    <label><span style="display:block;white-space:nowrap">Its opposite angle <span class="sr-unit-lbl" style="opacity:.7">(deg)</span></span>
+      <span class="nc-field" style="display:block"><input id="sr-ka" type="number" value="30" step="any"></span></label>
+    <label id="sr-oa-l"><span style="display:block;white-space:nowrap">Angle opposite wanted side <span class="sr-unit-lbl" style="opacity:.7">(deg)</span></span>
+      <span class="nc-field" style="display:block"><input id="sr-oa" type="number" value="45" step="any"></span></label>
     <label id="sr-os-l">Other side
       <span class="nc-field"><input id="sr-os" type="number" value="5" step="any"></span></label>
   </div>
@@ -42,6 +43,8 @@
 })();
 </script>
 
+<script src="/static/ncangle.js"></script>
+
 <script>
 (function(){
   const $ = id => document.getElementById(id);
@@ -62,8 +65,10 @@
     const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
   }
 
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
+
   function buildBody(){
-    return { mode:$("sr-mode").value, known_side:$("sr-ks").value, known_angle:$("sr-ka").value, other_angle:$("sr-oa").value, other_side:$("sr-os").value };
+    return { mode:$("sr-mode").value, known_side:$("sr-ks").value, known_angle:$("sr-ka").value, other_angle:$("sr-oa").value, other_side:$("sr-os").value, angle_unit:unit() };
   }
 
   async function update(){
@@ -130,10 +135,29 @@
 
   function drawFrame(ctx,t,d){ if(!d) return; drawTri(d); }
 
+  function syncUnitLabel(){
+    const t = (unit()==="rad") ? "(rad)" : "(deg)";
+    document.querySelectorAll(".sr-unit-lbl").forEach(el=>{ el.textContent = t; });
+  }
+
   function syncMode(){ const m=$("sr-mode").value; $("sr-oa-l").style.display=(m==="side")?"":"none"; $("sr-os-l").style.display=(m==="angle")?"":"none"; }
   ["sr-mode","sr-ks","sr-ka","sr-oa","sr-os"].forEach(id=>{ const el=$(id); el.addEventListener("input",()=>{syncMode();update();}); el.addEventListener("change",()=>{syncMode();update();}); });
+
+  if(window.NCAngle){
+    NCAngle.onChange(function(newUnit){
+      ["sr-ka","sr-oa"].forEach(id=>{
+        const v = parseFloat($(id).value);
+        if(!isNaN(v)){
+          if(newUnit==="rad") $(id).value = +(v*Math.PI/180).toFixed(4);
+          else                $(id).value = +(v*180/Math.PI).toFixed(4);
+        }
+      });
+      syncUnitLabel(); update();
+    });
+  }
+
   window.addEventListener("nc-theme-change", styleFields);
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });
-  styleFields(); syncMode(); update();
+  styleFields(); syncMode(); syncUnitLabel(); update();
 })();
 </script>

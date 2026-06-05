@@ -1,12 +1,13 @@
 <link rel="stylesheet" href="/static/nclearn.css">
 <div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
   <div class="viz-inputs">
     <label>Side a (opposite angle A)
       <span class="nc-field"><input id="ac-a" type="number" value="6" step="any"></span></label>
     <label>Side b
       <span class="nc-field"><input id="ac-b" type="number" value="8" step="any"></span></label>
-    <label>Angle A (°)
-      <span class="nc-field"><input id="ac-A" type="number" value="30" step="any"></span></label>
+    <label id="ac-A-l"><span style="display:block;white-space:nowrap">Angle A <span id="ac-unit-lbl" style="opacity:.7">(deg)</span></span>
+      <span class="nc-field" style="display:block"><input id="ac-A" type="number" value="30" step="any"></span></label>
   </div>
 
   <div class="viz-out" id="ac-out"></div>
@@ -38,6 +39,8 @@
 })();
 </script>
 
+<script src="/static/ncangle.js"></script>
+
 <script>
 (function(){
   const $ = id => document.getElementById(id);
@@ -58,8 +61,10 @@
     const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
   }
 
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
+
   function buildBody(){
-    return { a:$("ac-a").value, b:$("ac-b").value, A:$("ac-A").value };
+    return { a:$("ac-a").value, b:$("ac-b").value, A:$("ac-A").value, angle_unit:unit() };
   }
 
   async function update(){
@@ -145,9 +150,25 @@
 
   function drawFrame(ctx,t,d){ if(!d) return; drawCases(d); }
 
+  function syncUnitLabel(){
+    $("ac-unit-lbl").textContent = (unit()==="rad") ? "(rad)" : "(deg)";
+  }
+
   ["ac-a","ac-b","ac-A"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+
+  if(window.NCAngle){
+    NCAngle.onChange(function(newUnit){
+      const v = parseFloat($("ac-A").value);
+      if(!isNaN(v)){
+        if(newUnit==="rad") $("ac-A").value = +(v*Math.PI/180).toFixed(4);
+        else                $("ac-A").value = +(v*180/Math.PI).toFixed(4);
+      }
+      syncUnitLabel(); update();
+    });
+  }
+
   window.addEventListener("nc-theme-change", styleFields);
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });
-  styleFields();  update();
+  styleFields(); syncUnitLabel(); update();
 })();
 </script>
