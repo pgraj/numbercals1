@@ -12,7 +12,9 @@ register_faqs("trig-elevation-depression", [
           "they are alternate angles between parallel horizontal lines."},
     {"q": "Can you give a worked example?",
      "a": "Standing 50 m from a tower with an angle of elevation of 40°, the "
-          "height is distance × tan θ = 50 × tan 40° ≈ 41.95 m above eye level."},
+          "height is distance × tan θ = 50 × tan 40° ≈ 41.95 m above eye level. "
+          "The same angle in radians is 40° ≈ 0.6981 rad; the Degrees/Radians "
+          "toggle switches the input and the working."},
     {"q": "Which ratio do these problems use?",
      "a": "Almost always tangent, because the height is the side opposite the "
           "angle and the horizontal distance is the side adjacent to it, and "

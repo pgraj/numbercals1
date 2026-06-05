@@ -2,6 +2,10 @@
 
 Solve the classic height/distance/angle triangle using tanθ = height / distance.
 Given any two of {angle, height, distance}, find the third.
+
+Accepts `angle_unit` ("deg"|"rad"): in find=height/distance the angle θ is READ in
+that unit; in find=angle the computed θ is DISPLAYED in it; every step renders the
+angle to match the shared toggle.
 """
 import math
 
@@ -24,8 +28,8 @@ DISCLAIMER = (
     summary=(
         "Solve angle-of-elevation and angle-of-depression problems linking a "
         "height, a horizontal distance, and the viewing angle with tan θ = "
-        "height ÷ distance, shown on a scene with an observer, an object, and "
-        "the angle arc."
+        "height ÷ distance, in degrees or radians, shown on a scene with an "
+        "observer, an object, and the angle arc."
     ),
     formula="tan θ = height / distance",
     tags=[
@@ -36,23 +40,31 @@ DISCLAIMER = (
     ],
     viz_template="viz/trig-elevation-depression.html",
 )
-def compute(angle_deg=None, height=None, distance=None, find="height"):
+def compute(angle_deg=None, height=None, distance=None, find="height", angle_unit="deg"):
     try:
+        unit = "rad" if str(angle_unit) == "rad" else "deg"
+
         def num(x):
             if x is None or x == "":
                 return None
             return float(x)
 
-        angle = num(angle_deg)
+        angle_in = num(angle_deg)
         height = num(height)
         distance = num(distance)
         find = (find or "height").lower()
+
+        # interpret an entered angle (height/distance modes) in the chosen unit
+        angle = None
+        if angle_in is not None:
+            angle = angle_in if unit == "deg" else math.degrees(angle_in)
 
         if find == "height":
             if angle is None or distance is None:
                 return _err("To find the height, enter the angle and the distance.")
             if not (0 < angle < 90):
-                return _err("Enter an angle strictly between 0° and 90°.")
+                lim = "0° and 90°" if unit == "deg" else "0 and π/2 rad"
+                return _err("Enter an angle strictly between %s." % lim)
             if distance <= 0:
                 return _err("Distance must be greater than zero.")
             height = distance * math.tan(math.radians(angle))
@@ -61,8 +73,8 @@ def compute(angle_deg=None, height=None, distance=None, find="height"):
                  "math": r"\(\tan\theta = \dfrac{\text{height}}{\text{distance}}\)",
                  "note": "The angle sits at the observer; height is vertical, distance horizontal."},
                 {"label": "Rearrange for height",
-                 "math": r"\(\text{height} = \text{distance}\,\tan\theta = %s\,\tan %s^\circ\)"
-                         % (_fmt(distance), _fmt(angle)),
+                 "math": r"\(\text{height} = \text{distance}\,\tan\theta = %s\,\tan %s\)"
+                         % (_fmt(distance), _ang(angle, unit)),
                  "note": "Multiply the horizontal distance by tan of the angle."},
                 {"label": "Result",
                  "math": r"\(\text{height} = %s\)" % _fmt(height),
@@ -73,7 +85,8 @@ def compute(angle_deg=None, height=None, distance=None, find="height"):
             if angle is None or height is None:
                 return _err("To find the distance, enter the angle and the height.")
             if not (0 < angle < 90):
-                return _err("Enter an angle strictly between 0° and 90°.")
+                lim = "0° and 90°" if unit == "deg" else "0 and π/2 rad"
+                return _err("Enter an angle strictly between %s." % lim)
             if height <= 0:
                 return _err("Height must be greater than zero.")
             distance = height / math.tan(math.radians(angle))
@@ -82,8 +95,8 @@ def compute(angle_deg=None, height=None, distance=None, find="height"):
                  "math": r"\(\tan\theta = \dfrac{\text{height}}{\text{distance}}\)",
                  "note": "Rearrange to make the distance the subject."},
                 {"label": "Rearrange for distance",
-                 "math": r"\(\text{distance} = \dfrac{\text{height}}{\tan\theta} = \dfrac{%s}{\tan %s^\circ}\)"
-                         % (_fmt(height), _fmt(angle)),
+                 "math": r"\(\text{distance} = \dfrac{\text{height}}{\tan\theta} = \dfrac{%s}{\tan %s}\)"
+                         % (_fmt(height), _ang(angle, unit)),
                  "note": "Divide the height by tan of the angle."},
                 {"label": "Result",
                  "math": r"\(\text{distance} = %s\)" % _fmt(distance),
@@ -106,19 +119,25 @@ def compute(angle_deg=None, height=None, distance=None, find="height"):
                          % (_fmt(height), _fmt(distance)),
                  "note": "Use the inverse tangent to recover the angle."},
                 {"label": "Result",
-                 "math": r"\(\theta \approx %s^\circ\)" % _fmt(angle),
+                 "math": r"\(\theta \approx %s\)" % _ang(angle, unit),
                  "note": "Elevation looks up; depression looks down by the same angle."},
             ]
             result = angle
         else:
             return _err("Choose what to find: height, distance, or angle.")
 
+        # result string: angle results display in the chosen unit
+        if find == "angle":
+            result_str = _disp(angle, unit)
+        else:
+            result_str = _fmt(result)
+
         return {
-            "result": _fmt(result),
+            "result": result_str,
             "angle": round(angle, 4) if angle is not None else None,
             "height": round(height, 6) if height is not None else None,
             "distance": round(distance, 6) if distance is not None else None,
-            "find": find,
+            "find": find, "angle_unit": unit,
             "steps": steps,
             "explanation": [
                 {"heading": "Elevation vs depression",
@@ -135,6 +154,20 @@ def compute(angle_deg=None, height=None, distance=None, find="height"):
         }
     except (TypeError, ValueError):
         return _err("Please enter valid numbers.")
+
+
+def _ang(deg, unit):
+    """LaTeX angle in the chosen unit (for step math)."""
+    if unit == "rad":
+        return _fmt(math.radians(deg)) + r"\,\text{rad}"
+    return _fmt(deg) + r"^\circ"
+
+
+def _disp(deg, unit):
+    """Plain-text angle WITH unit (for the result string)."""
+    if unit == "rad":
+        return _fmt(math.radians(deg)) + " rad"
+    return _fmt(deg) + "\u00b0"
 
 
 def _err(msg):

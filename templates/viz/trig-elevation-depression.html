@@ -1,10 +1,11 @@
 <link rel="stylesheet" href="/static/nclearn.css">
 <div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
   <div class="viz-inputs">
     <label>Find
       <span class="nc-field"><select id="el-find"><option value="height" selected>Height</option><option value="distance">Distance</option><option value="angle">Angle</option></select></span></label>
-    <label>Angle \u03b8 (degrees)
-      <span class="nc-field"><input id="el-ang" type="number" value="40" step="any"></span></label>
+    <label id="el-ang-l"><span style="display:block;white-space:nowrap">Angle &theta; <span id="el-unit-lbl" style="opacity:.7">(deg)</span></span>
+      <span class="nc-field" style="display:block"><input id="el-ang" type="number" value="40" step="any"></span></label>
     <label>Distance
       <span class="nc-field"><input id="el-dist" type="number" value="50" step="any"></span></label>
     <label>Height
@@ -40,6 +41,8 @@
 })();
 </script>
 
+<script src="/static/ncangle.js"></script>
+
 <script>
 (function(){
   const $ = id => document.getElementById(id);
@@ -60,8 +63,10 @@
     const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
   }
 
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
+
   function buildBody(){
-    return { find:$("el-find").value, angle_deg:$("el-ang").value, distance:$("el-dist").value, height:$("el-h").value };
+    return { find:$("el-find").value, angle_deg:$("el-ang").value, distance:$("el-dist").value, height:$("el-h").value, angle_unit:unit() };
   }
 
   async function update(){
@@ -73,7 +78,7 @@
     try { if(window.NCSteps) window.NCSteps.render(data.steps||[]); } catch(e){}
     if (data.disclaimer) $(P+"-disc").textContent="\u26a0 "+data.disclaimer;
     if (data.error){ $(P+"-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} drawDiagram(null); last=null; mountLearn(null); return; }
-    $(P+"-out").innerHTML = '<b>'+ ({height:"Height",distance:"Distance",angle:"Angle"}[data.find]) +' = '+data.result+ (data.find==="angle"?"\u00b0":"") +'</b>';
+    $(P+"-out").innerHTML = '<b>'+ ({height:"Height",distance:"Distance",angle:"Angle"}[data.find]) +' = '+data.result +'</b>';
     try{ window.__ncExplain(data.explanation);}catch(e){}
     last=data; drawDiagram(data); mountLearn(data);
   }
@@ -126,10 +131,27 @@
     drawScene(ctx,d,s,ink,accent,yes,soft,rule,grow);
   }
 
+  function syncUnitLabel(){
+    $("el-unit-lbl").textContent = (unit()==="rad") ? "(rad)" : "(deg)";
+  }
+
   function syncEl(){ const f=$("el-find").value; $("el-h").closest("label").style.display=(f==="height")?"none":""; $("el-dist").closest("label").style.display=(f==="distance")?"none":""; $("el-ang").closest("label").style.display=(f==="angle")?"none":""; }
   ["el-find","el-ang","el-dist","el-h"].forEach(id=>{ const el=$(id); el.addEventListener("input",()=>{syncEl();update();}); el.addEventListener("change",()=>{syncEl();update();}); });
+
+  if(window.NCAngle){
+    NCAngle.onChange(function(newUnit){
+      // convert the angle field (used as input in height/distance modes)
+      const v = parseFloat($("el-ang").value);
+      if(!isNaN(v)){
+        if(newUnit==="rad") $("el-ang").value = +(v*Math.PI/180).toFixed(4);
+        else                $("el-ang").value = +(v*180/Math.PI).toFixed(4);
+      }
+      syncUnitLabel(); update();
+    });
+  }
+
   window.addEventListener("nc-theme-change", styleFields);
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });
-  styleFields(); syncEl(); update();
+  styleFields(); syncEl(); syncUnitLabel(); update();
 })();
 </script>
