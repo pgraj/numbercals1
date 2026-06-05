@@ -16,8 +16,8 @@ DISCLAIMER = (
     slug="trig-angles",
     name="Angles & angle types",
     section="maths",
-    sub="Foundations",
-    topic="Trigonometry",
+    sub="Angles",
+    topic="Geometry",
     order=0,
     summary=(
         "Classify any angle as acute, right, obtuse, straight, or reflex, and "
