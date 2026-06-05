@@ -1,22 +1,26 @@
 from core.faqs import register_faqs
 register_faqs("trig-heron", [
-    {"q": "What is Heron's formula?",
-     "a": "Heron's formula gives a triangle's area from its three sides alone: "
-          "Area = √(s(s−a)(s−b)(s−c)), where s = (a+b+c)/2 is the semi-perimeter. "
-          "No angle or height is needed."},
-    {"q": "What is the semi-perimeter?",
-     "a": "The semi-perimeter s is half the triangle's perimeter, (a+b+c)/2. Each "
-          "factor in the formula, (s−a), (s−b), (s−c), is the semi-perimeter minus "
-          "one side."},
+    {"q": "How does this differ from the geometry Heron's formula calculator?",
+     "a": "The geometry version applies the finished formula √(s(s−a)(s−b)(s−c)) "
+          "directly. This trigonometry version derives the area instead: it uses "
+          "the cosine rule to find the included angle, then the area formula "
+          "½·a·b·sin C, and shows that the result is exactly Heron's formula."},
+    {"q": "Why does ½·a·b·sin C give the same answer as Heron's formula?",
+     "a": "Substitute cos C = (a²+b²−c²)/(2ab) from the cosine rule into "
+          "sin C = √(1−cos²C), then into ½·a·b·sin C. After simplifying, the "
+          "expression collapses to √(s(s−a)(s−b)(s−c)) — Heron's formula. The two "
+          "are algebraically identical, so they always agree."},
     {"q": "Can you give a worked example?",
-     "a": "For a 3-4-5 triangle: s = (3+4+5)/2 = 6, so Area = √(6·3·2·1) = √36 = 6 "
-          "square units — matching the familiar right-triangle area."},
-    {"q": "When is Heron's formula most useful?",
-     "a": "When you know all three side lengths but no angle and cannot easily "
-          "measure the height — common for land plots, awkward shapes, or "
-          "triangles defined only by coordinates."},
+     "a": "For a 3-4-5 triangle, the angle between sides 3 and 4 has "
+          "cos C = (9+16−25)/(2·3·4) = 0, so C = 90° and sin C = 1. Then "
+          "Area = ½·3·4·1 = 6 — the same as Heron's √(6·3·2·1) = 6 square units."},
+    {"q": "What is the included angle C here?",
+     "a": "C is the angle between sides a and b, the side opposite it being c. The "
+          "cosine rule pins it down from the three side lengths. It is only an "
+          "intermediate step — what the area formula actually needs is sin C."},
     {"q": "Where is this used in real life?",
-     "a": "Surveyors and civil engineers find land and plot areas from side "
-          "measurements, architects and builders work out triangular areas, and it "
-          "is used in computer graphics to find the area of triangular faces."},
+     "a": "The cosine-rule-to-area route is common in surveying and navigation, "
+          "where two distances and the angle between them are known, and in "
+          "computer graphics and physics, where triangle areas are computed from "
+          "vectors whose included angle comes from a dot product."},
 ])

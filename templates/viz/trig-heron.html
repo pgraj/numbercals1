@@ -71,7 +71,7 @@
     try { if(window.NCSteps) window.NCSteps.render(data.steps||[]); } catch(e){}
     if (data.disclaimer) $(P+"-disc").textContent="\u26a0 "+data.disclaimer;
     if (data.error){ $(P+"-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} drawDiagram(null); last=null; mountLearn(null); return; }
-    $(P+"-out").innerHTML = '<b>Area = '+data.result+'</b>  \u00b7  s = '+fmt(data.s);
+    $(P+"-out").innerHTML = '<b>Area = '+data.result+'</b>  \u00b7  via \u00bd\u00b7a\u00b7b\u00b7sin C  \u00b7  C \u2248 '+fmt(data.angle_c)+'\u00b0';
     try{ window.__ncExplain(data.explanation);}catch(e){}
     last=data; drawDiagram(data); mountLearn(data);
   }
@@ -104,8 +104,13 @@
     ctx.fillText("c="+fmt(c), (bx0+bx1)/2, by+18);
     ctx.fillText("b="+fmt(b), (bx0+apexX)/2-14, (by+apexY)/2);
     ctx.fillText("a="+fmt(a), (bx1+apexX)/2+14, (by+apexY)/2);
-    ctx.fillStyle=yes; ctx.font="bold 14px "+(s.mono||"monospace"); ctx.textAlign="left"; ctx.fillText("s = "+fmt(d.s)+"   Area = "+fmt(d.area), 24, 28);
-    if(cap) cap.textContent="Area from the three sides alone; s is the semi-perimeter (half the total perimeter).";
+    ctx.fillStyle=yes; ctx.font="bold 14px "+(s.mono||"monospace"); ctx.textAlign="left"; ctx.fillText("Area = "+fmt(d.area)+"  (\u00bd\u00b7a\u00b7b\u00b7sin C)", 24, 28);
+    // mark the included angle C at the apex (between sides a and b)
+    if(d.angle_c!==undefined){
+      ctx.fillStyle=accent; ctx.font="bold 13px "+(s.sans||"sans-serif"); ctx.textAlign="center";
+      ctx.fillText("C \u2248 "+fmt(d.angle_c)+"\u00b0", apexX, apexY-10);
+    }
+    if(cap) cap.textContent="C is the included angle (between a and b) from the cosine rule; the area is \u00bd\u00b7a\u00b7b\u00b7sin C.";
   }
 
 
