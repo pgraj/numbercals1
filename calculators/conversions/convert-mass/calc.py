@@ -49,7 +49,7 @@ _EXPLANATION = [
     slug="convert-mass",
     name="Mass Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="1 · Basic Converters",
     summary="Convert mass between metric, avoirdupois and troy units, including metric and imperial tons, via the kilogram.",
     formula="result = value × (from→kg) ÷ (to→kg)",
     tags=['mass', 'converter', 'conversion'],

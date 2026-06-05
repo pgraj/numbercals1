@@ -48,7 +48,7 @@ _EXPLANATION = [
     slug="convert-volume",
     name="Volume Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="3 · Thermal, Materials & Everyday",
     summary="Convert volume between litres, US customary cooking units and cubic measures via the cubic metre.",
     formula="result = value × (from→m³) ÷ (to→m³)",
     tags=['volume', 'converter', 'conversion'],

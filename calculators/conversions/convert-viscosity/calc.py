@@ -43,7 +43,7 @@ _EXPLANATION = [
     slug="convert-viscosity",
     name="Viscosity Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="2 · Mechanics & Fluids",
     summary="Convert dynamic viscosity (Pa·s, poise, cP) and kinematic viscosity (m²/s, stokes, cSt). Pick one family.",
     formula="result = value × (from→Pa·s) ÷ (to→Pa·s); kinematic via m²/s",
     tags=['viscosity', 'converter', 'conversion'],

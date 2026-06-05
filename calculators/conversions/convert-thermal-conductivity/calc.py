@@ -39,7 +39,7 @@ _EXPLANATION = [
     slug="convert-thermal-conductivity",
     name="Thermal Conductivity Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="3 · Thermal, Materials & Everyday",
     summary="Convert thermal conductivity between W/(m·K) and BTU/(hr·ft·°F) via the SI base.",
     formula="result = value × (from→W/(m·K)) ÷ (to→W/(m·K))",
     tags=['thermal', 'conductivity', 'converter', 'conversion'],

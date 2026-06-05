@@ -6,7 +6,8 @@ from core.registry import register
 @register(
     slug="quadratic",
     name="Quadratic equation solver",
-    section="maths",
+    section="maths",
+    topic="Algebra",
     sub="Algebra",
     tags=["roots", "discriminant", "parabola"],
     formula="x = (−b ± √(b²−4ac)) / 2a",

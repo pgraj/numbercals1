@@ -50,7 +50,7 @@ _EXPLANATION = [
     slug="density-weight",
     name="Density & Shipping Weight Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="3 · Thermal, Materials & Everyday",
     summary="Convert a volume of a material into its actual shipping weight using a built-in density catalogue (water, fuels, metals, woods, concrete).",
     formula="weight = volume × density",
     tags=["density", "weight", "shipping", "freight", "material", "converter"],

@@ -6,7 +6,8 @@ from core.registry import register
 @register(
     slug="fraction",
     name="Fraction calculator",
-    section="maths",
+    section="maths",
+    topic="Arithmetic",
     sub="Arithmetic",
     tags=["fraction", "add", "subtract", "multiply", "divide"],
     formula="a/b op c/d  →  simplest form",

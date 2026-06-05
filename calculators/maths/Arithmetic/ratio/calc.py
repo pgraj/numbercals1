@@ -6,7 +6,8 @@ from core.registry import register
 @register(
     slug="ratio",
     name="Ratio calculator",
-    section="maths",
+    section="maths",
+    topic="Arithmetic",
     sub="Arithmetic",
     tags=["ratio", "simplify", "proportion"],
     formula="a:b ÷ gcd(a,b) = simplest ratio",

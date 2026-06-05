@@ -39,7 +39,7 @@ _EXPLANATION = [
     slug="convert-heat-flux",
     name="Heat Flux Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="3 · Thermal, Materials & Everyday",
     summary="Convert heat flux density between W/m² and BTU/(hr·ft²) via the SI base.",
     formula="result = value × (from→W/m²) ÷ (to→W/m²)",
     tags=['heat', 'flux', 'converter', 'conversion'],

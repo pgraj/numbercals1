@@ -43,7 +43,7 @@ _EXPLANATION = [
     slug="prandtl-number",
     name="Prandtl Number Calculator",
     section="conversions",
-    sub="3 · Dimensionless Number Engines",
+    sub="4 · Dimensionless Number Engines",
     summary="Compute the Prandtl number from specific heat, dynamic viscosity and thermal conductivity to compare momentum and thermal diffusion.",
     formula="Pr = Cp·μ ÷ k",
     tags=['prandtl', 'number', 'dimensionless', 'fluid', 'aerospace'],

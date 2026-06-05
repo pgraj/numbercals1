@@ -45,7 +45,7 @@ _EXPLANATION = [
     slug="reynolds-number",
     name="Reynolds Number Calculator",
     section="conversions",
-    sub="3 · Dimensionless Number Engines",
+    sub="4 · Dimensionless Number Engines",
     summary="Compute the Reynolds number from density, velocity, length and dynamic viscosity to classify a flow as laminar, transitional or turbulent.",
     formula="Re = ρ·v·L ÷ μ",
     tags=['reynolds', 'number', 'dimensionless', 'fluid', 'aerospace'],

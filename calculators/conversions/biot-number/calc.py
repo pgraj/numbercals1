@@ -45,7 +45,7 @@ _EXPLANATION = [
     slug="biot-number",
     name="Biot Number Calculator",
     section="conversions",
-    sub="3 · Dimensionless Number Engines",
+    sub="4 · Dimensionless Number Engines",
     summary="Compute the Biot number from heat transfer coefficient, characteristic length and solid thermal conductivity — surface dissipation vs internal conduction.",
     formula="Bi = h·L ÷ kₛ",
     tags=['biot', 'number', 'dimensionless', 'fluid', 'aerospace'],

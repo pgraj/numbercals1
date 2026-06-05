@@ -43,7 +43,7 @@ _EXPLANATION = [
     slug="strouhal-number",
     name="Strouhal Number Calculator",
     section="conversions",
-    sub="3 · Dimensionless Number Engines",
+    sub="4 · Dimensionless Number Engines",
     summary="Compute the Strouhal number from vortex shedding frequency, characteristic length and flow velocity for oscillating-flow and wake analysis.",
     formula="St = f·L ÷ v",
     tags=['strouhal', 'number', 'dimensionless', 'fluid', 'aerospace'],

@@ -44,7 +44,7 @@ _EXPLANATION = [
     slug="mach-number",
     name="Mach Number Calculator",
     section="conversions",
-    sub="3 · Dimensionless Number Engines",
+    sub="4 · Dimensionless Number Engines",
     summary="Compute the Mach number from speed, air temperature and gas properties to classify flight as subsonic, transonic, supersonic or hypersonic.",
     formula="M = v ÷ √(γ·R·T)",
     tags=['mach', 'number', 'dimensionless', 'fluid', 'aerospace'],

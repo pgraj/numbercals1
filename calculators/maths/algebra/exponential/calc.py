@@ -3,7 +3,7 @@ from core.registry import register
 
 
 @register(
-    slug="exponential", name="Exponential calculator", section="maths", sub="Algebra",
+    slug="exponential", name="Exponential calculator", section="maths", sub="Algebra", topic="Algebra",
     tags=["exponential", "growth", "decay", "power"],
     formula="y = a · b^x",
     summary="Evaluate y = a·b^x at a chosen x, with the growth/decay curve plotted.",

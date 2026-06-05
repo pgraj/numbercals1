@@ -6,7 +6,8 @@ from core.registry import register
 @register(
     slug="lcm",
     name="LCM (Least Common Multiple) calculator",
-    section="maths",
+    section="maths",
+    topic="Arithmetic",
     sub="Arithmetic",
     tags=["lcm", "multiple", "least common multiple"],
     formula="lcm(a,b) = |a·b| / gcd(a,b)",

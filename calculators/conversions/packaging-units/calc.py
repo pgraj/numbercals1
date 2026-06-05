@@ -29,7 +29,7 @@ _EXPLANATION = [
     slug="packaging-units",
     name="Retail Packaging Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="3 · Thermal, Materials & Everyday",
     summary="Convert quantities across a retail packaging hierarchy — pallets, cases, packs and units — with configurable units-per-level.",
     formula="units = qty × (cases/pallet × packs/case × units/pack), scaled from the chosen level",
     tags=["packaging", "retail", "pallet", "case", "pack", "logistics", "converter"],

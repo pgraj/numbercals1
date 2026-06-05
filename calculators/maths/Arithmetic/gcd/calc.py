@@ -6,7 +6,8 @@ from core.registry import register
 @register(
     slug="gcd",
     name="GCD (Greatest Common Divisor) calculator",
-    section="maths",
+    section="maths",
+    topic="Arithmetic",
     sub="Arithmetic",
     tags=["gcd", "hcf", "greatest common divisor", "factor"],
     formula="gcd via Euclid's algorithm",

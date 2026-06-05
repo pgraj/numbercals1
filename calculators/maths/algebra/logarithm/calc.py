@@ -4,7 +4,7 @@ from core.registry import register
 
 
 @register(
-    slug="logarithm", name="Logarithm calculator", section="maths", sub="Algebra",
+    slug="logarithm", name="Logarithm calculator", section="maths", sub="Algebra", topic="Algebra",
     tags=["log", "logarithm", "ln", "log10", "base"],
     formula="log_b(x) = ln(x) / ln(b)",
     summary="Logarithm of a value to any base, with the log curve plotted.",

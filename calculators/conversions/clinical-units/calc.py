@@ -50,7 +50,7 @@ _EXPLANATION = [
     slug="clinical-units",
     name="Clinical Lab Value Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="3 · Thermal, Materials & Everyday",
     summary="Convert clinical lab values between conventional (mg/dL) and SI (mmol/L) units using each analyte's molar mass, plus HbA1c percent ↔ mmol/mol.",
     formula="mmol/L = (mg/dL × 10) ÷ molar mass;  mg/dL = (mmol/L × molar mass) ÷ 10",
     tags=["clinical", "lab", "mmol", "mg/dl", "glucose", "cholesterol", "hba1c", "converter"],

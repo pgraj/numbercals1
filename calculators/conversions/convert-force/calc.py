@@ -41,7 +41,7 @@ _EXPLANATION = [
     slug="convert-force",
     name="Force & Thrust Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="1 · Basic Converters",
     summary="Convert force and thrust between newtons, kilonewtons, pound-force and kilogram-force via the newton.",
     formula="result = value × (from→N) ÷ (to→N)",
     tags=['force', 'converter', 'conversion'],

@@ -47,7 +47,7 @@ _EXPLANATION = [
     slug="convert-pressure",
     name="Pressure Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="2 · Mechanics & Fluids",
     summary="Convert pressure between Pa, bar, PSI, atm, mmHg/Torr and inH₂O via the pascal.",
     formula="result = value × (from→Pa) ÷ (to→Pa)",
     tags=['pressure', 'converter', 'conversion'],

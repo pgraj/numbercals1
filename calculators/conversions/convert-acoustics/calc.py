@@ -77,7 +77,7 @@ _EXPLANATION = [
     slug="convert-acoustics",
     name="Acoustics & Signal Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="2 · Mechanics & Fluids",
     summary="Convert acoustic and signal levels between decibels, bels, nepers, sound pressure (Pa) and sones on a logarithmic scale.",
     formula="dB = 20·log10(p/p_ref); p_ref = 20 µPa. 1 Bel = 10 dB; 1 Np = 20/ln10 dB.",
     tags=["acoustics", "decibel", "bel", "neper", "spl", "sone", "logarithmic", "converter"],

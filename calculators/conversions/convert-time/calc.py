@@ -50,7 +50,7 @@ _EXPLANATION = [
     slug="convert-time",
     name="Time Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="1 · Basic Converters",
     summary="Convert time between nanoseconds and millennia via the second. Month = 30 days, year = 365.25 days (Julian).",
     formula="result = value × (from→s) ÷ (to→s)",
     tags=['time', 'converter', 'conversion'],

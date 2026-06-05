@@ -41,7 +41,7 @@ _EXPLANATION = [
     slug="convert-flow-rate",
     name="Flow Rate Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="2 · Mechanics & Fluids",
     summary="Convert volumetric flow rate between m³/s, CFM, L/min and L/s via cubic metres per second.",
     formula="result = value × (from→m³/s) ÷ (to→m³/s)",
     tags=['flow', 'rate', 'converter', 'conversion'],

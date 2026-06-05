@@ -40,7 +40,7 @@ _EXPLANATION = [
     slug="convert-angular-velocity",
     name="Angular Velocity Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="2 · Mechanics & Fluids",
     summary="Convert angular velocity between rad/s, RPM and deg/s via radians per second.",
     formula="result = value × (from→rad/s) ÷ (to→rad/s)",
     tags=['angular', 'velocity', 'converter', 'conversion'],

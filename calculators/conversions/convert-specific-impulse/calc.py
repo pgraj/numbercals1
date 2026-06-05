@@ -40,7 +40,7 @@ _EXPLANATION = [
     slug="convert-specific-impulse",
     name="Specific Impulse Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="2 · Mechanics & Fluids",
     summary="Convert rocket specific impulse between seconds and effective exhaust velocity (N·s/kg = m/s) using g₀.",
     formula="Isp(m/s) = Isp(s) × g₀; g₀ = 9.80665 m/s². Base = N·s/kg = m/s.",
     tags=['specific', 'impulse', 'converter', 'conversion'],

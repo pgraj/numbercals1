@@ -39,7 +39,7 @@ _EXPLANATION = [
     slug="convert-thermal-expansion",
     name="Thermal Expansion Coefficient Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="3 · Thermal, Materials & Everyday",
     summary="Convert linear thermal expansion coefficient between 1/K and 1/°F.",
     formula="result = value × (from→1/K) ÷ (to→1/K); 1/°F = 1.8 × 1/K",
     tags=['thermal', 'expansion', 'converter', 'conversion'],

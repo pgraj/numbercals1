@@ -43,7 +43,7 @@ _EXPLANATION = [
     slug="nusselt-number",
     name="Nusselt Number Calculator",
     section="conversions",
-    sub="3 · Dimensionless Number Engines",
+    sub="4 · Dimensionless Number Engines",
     summary="Compute the Nusselt number from convective coefficient, characteristic length and fluid thermal conductivity — the convective-to-conductive heat transfer ratio.",
     formula="Nu = h·L ÷ k",
     tags=['nusselt', 'number', 'dimensionless', 'fluid', 'aerospace'],

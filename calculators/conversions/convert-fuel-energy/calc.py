@@ -41,7 +41,7 @@ _EXPLANATION = [
     slug="convert-fuel-energy",
     name="Chemical Specific Energy Converter",
     section="conversions",
-    sub="2 · Advanced Converters",
+    sub="2 · Mechanics & Fluids",
     summary="Convert specific (gravimetric) energy of fuels between MJ/kg, BTU/lb, kWh/kg and cal/g.",
     formula="result = value × (from→MJ/kg) ÷ (to→MJ/kg)",
     tags=['fuel', 'energy', 'converter', 'conversion'],

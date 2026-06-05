@@ -5,7 +5,8 @@ from core.registry import register
 @register(
     slug="percentage",
     name="Percentage calculator",
-    section="maths",
+    section="maths",
+    topic="Arithmetic",
     sub="Arithmetic",
     tags=["percent", "percentage", "ratio", "change"],
     formula="part = (p/100)·whole ; p = (part/whole)·100",

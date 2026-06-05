@@ -3,7 +3,7 @@ from core.registry import register
 
 
 @register(
-    slug="linear-equation", name="Linear equation solver", section="maths", sub="Algebra",
+    slug="linear-equation", name="Linear equation solver", section="maths", sub="Algebra", topic="Algebra",
     tags=["linear", "equation", "root", "slope", "intercept"],
     formula="ax + b = 0  →  x = −b / a",
     summary="Solve ax + b = 0 for x, and see where the line crosses zero.",
