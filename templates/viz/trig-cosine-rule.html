@@ -1,5 +1,6 @@
 <link rel="stylesheet" href="/static/nclearn.css">
 <div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
   <div class="viz-inputs">
     <label>Find
       <span class="nc-field"><select id="cr-mode"><option value="side" selected>Third side (SAS)</option><option value="angle">An angle (SSS)</option></select></span></label>
@@ -7,8 +8,8 @@
       <span class="nc-field"><input id="cr-a" type="number" value="5" step="any"></span></label>
     <label>Side b
       <span class="nc-field"><input id="cr-b" type="number" value="7" step="any"></span></label>
-    <label id="cr-C-l">Included angle C (°)
-      <span class="nc-field"><input id="cr-C" type="number" value="60" step="any"></span></label>
+    <label id="cr-C-l" style="margin-left:15px"><span style="display:block;white-space:nowrap">Incl angle C <span id="cr-unit-lbl" style="opacity:.7">(deg)</span></span>
+      <span class="nc-field" style="display:block"><input id="cr-C" type="number" value="60" step="any"></span></label>
     <label id="cr-c-l">Side c
       <span class="nc-field"><input id="cr-c" type="number" value="6" step="any"></span></label>
   </div>
@@ -42,6 +43,8 @@
 })();
 </script>
 
+<script src="/static/ncangle.js"></script>
+
 <script>
 (function(){
   const $ = id => document.getElementById(id);
@@ -62,8 +65,10 @@
     const d=$(P+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
   }
 
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
+
   function buildBody(){
-    return { mode:$("cr-mode").value, a:$("cr-a").value, b:$("cr-b").value, angle_C:$("cr-C").value, c:$("cr-c").value };
+    return { mode:$("cr-mode").value, a:$("cr-a").value, b:$("cr-b").value, angle_C:$("cr-C").value, c:$("cr-c").value, angle_unit:unit() };
   }
 
   async function update(){
@@ -128,9 +133,29 @@
   function drawFrame(ctx,t,d){ if(!d) return; const base=(d.angle_C!==undefined?d.angle_C:60); const sweep=base + 30*Math.sin(t*2*Math.PI); drawTri(d, Math.max(15,Math.min(165,sweep))); }
 
   function syncMode(){ const m=$("cr-mode").value; $("cr-C-l").style.display=(m==="side")?"":"none"; $("cr-c-l").style.display=(m==="angle")?"":"none"; }
+
+  function syncUnitLabel(){
+    const u = unit();
+    $("cr-unit-lbl").textContent = (u==="rad") ? "(rad)" : "(deg)";
+  }
+
   ["cr-mode","cr-a","cr-b","cr-C","cr-c"].forEach(id=>{ const el=$(id); el.addEventListener("input",()=>{syncMode();update();}); el.addEventListener("change",()=>{syncMode();update();}); });
+
+  // When the student flips degrees/radians: convert the angle field value to the
+  // new unit (so the same physical angle is preserved), relabel, and recompute.
+  if(window.NCAngle){
+    NCAngle.onChange(function(newUnit){
+      const v = parseFloat($("cr-C").value);
+      if(!isNaN(v)){
+        if(newUnit==="rad") $("cr-C").value = +(v*Math.PI/180).toFixed(4);   // was degrees
+        else                $("cr-C").value = +(v*180/Math.PI).toFixed(4);   // was radians
+      }
+      syncUnitLabel(); update();
+    });
+  }
+
   window.addEventListener("nc-theme-change", styleFields);
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });
-  styleFields(); syncMode(); update();
+  styleFields(); syncMode(); syncUnitLabel(); update();
 })();
 </script>

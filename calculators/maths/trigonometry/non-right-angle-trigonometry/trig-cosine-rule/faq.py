@@ -10,11 +10,13 @@ register_faqs("trig-cosine-rule", [
           "angle — cases the sine rule cannot start from."},
     {"q": "Can you give a worked example?",
      "a": "With a = 5, b = 7, and the included angle C = 60°: c² = 25 + 49 − "
-          "2·5·7·cos 60° = 74 − 35 = 39, so c = √39 ≈ 6.24."},
+          "2·5·7·cos 60° = 74 − 35 = 39, so c = √39 ≈ 6.24. The same angle in "
+          "radians is 60° = π/3 ≈ 1.0472 rad; switch the Degrees/Radians toggle "
+          "and the working updates to match."},
     {"q": "How is it related to Pythagoras?",
-     "a": "When C = 90°, cos C = 0 and the formula reduces to c² = a² + b² — "
-          "exactly Pythagoras' theorem. The cosine rule is its generalisation to "
-          "any angle."},
+     "a": "When C = 90° (π/2 ≈ 1.5708 rad), cos C = 0 and the formula reduces to "
+          "c² = a² + b² — exactly Pythagoras' theorem. The cosine rule is its "
+          "generalisation to any angle."},
     {"q": "Where is this used in real life?",
      "a": "Navigators and surveyors compute distances across awkward terrain, "
           "engineers analyse forces and frameworks, and it is used in GPS, "
