@@ -1,0 +1,22 @@
+{# _angle_unit.html — shared Degrees/Radians toggle (OPT-IN).
+
+   Include this in a trig viz ONLY when the calculator works with angles:
+       {% include "_angle_unit.html" %}
+   and load the engine once in that viz (or via the viz's own <script src>):
+       <script src="/static/ncangle.js"></script>
+
+   The toggle is markup-only; ncangle.js wires clicks, styles the buttons from
+   NCSkin tokens, persists the choice for the session, and dispatches
+   "nc-angle-change". Each viz listens and re-calls compute() with the new
+   angle_unit so the result AND the step-by-step working re-derive in the
+   chosen unit.
+
+   Non-trig calculators never include this, so they are unaffected. #}
+<div class="nc-angle-unit" role="group" aria-label="Angle unit"
+     style="display:flex;flex-direction:column;gap:.15rem">
+  <span class="nc-angle-caption" style="font-size:.85rem;opacity:.8">Angle unit</span>
+  <div class="nc-angle-seg">
+    <button type="button" data-nc-angle="deg" class="active" aria-pressed="true">Degrees</button>
+    <button type="button" data-nc-angle="rad" aria-pressed="false">Radians</button>
+  </div>
+</div>

@@ -1,0 +1,295 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+
+  <div class="viz-inputs nc-vrow-wrap"
+       style="display:grid;grid-template-columns:auto auto;gap:14px 20px;align-items:center;justify-content:center;width:fit-content;margin:0 auto 4px">
+
+    {# Row 1: angle-unit toggle (col 1) + identity selector (col 2) #}
+    {% include "_angle_unit.html" %}
+    <label style="display:block">Identity
+      <span class="nc-field" style="display:block">
+        <select id="pi-form" style="width:240px">
+          <option value="sin-cos" selected>sin²θ + cos²θ = 1</option>
+          <option value="tan-sec">1 + tan²θ = sec²θ</option>
+          <option value="cot-cosec">1 + cot²θ = cosec²θ</option>
+        </select>
+      </span>
+    </label>
+
+    {# Row 2: narrow angle box (col 1) + slider with live value (col 2) #}
+    <label style="display:block">Angle (<span id="pi-unit-lbl">degrees</span>)
+      <span class="nc-field" style="display:block">
+        <input id="pi-angle" type="number" value="30" step="any" style="width:90px">
+      </span>
+    </label>
+    <span style="display:flex;align-items:center;gap:.6rem;width:240px">
+      <input id="pi-slider" type="range" min="0" max="360" value="30" step="1"
+             style="flex:1 1 auto">
+      <span id="pi-slider-val"
+            style="font-family:var(--mono);flex:0 0 auto;min-width:4.5em;text-align:right"></span>
+    </span>
+
+  </div>
+
+  {# The interactive picture — ALWAYS visible; the slider/inputs drive it live #}
+  <canvas id="pi-canvas" width="640" height="360"
+          style="display:block;width:100%;height:auto;max-width:520px;margin:8px auto 0"></canvas>
+  <p class="viz-caption" id="pi-cap"
+     style="font-size:.9rem;margin-top:.5rem;opacity:.85;text-align:center"></p>
+
+  <div class="viz-out" id="viz-out" style="margin-top:10px"></div>
+
+  {# Three-way learning toggle: Direct answer / Step-by-step / Animation #}
+  <div class="nc-learn3" id="pi-learn3" role="group" aria-label="Answer detail"
+       style="display:inline-flex;border-radius:8px;overflow:hidden;margin:10px 0 6px">
+    <button type="button" data-mode="direct" class="active" aria-pressed="true">Direct answer</button>
+    <button type="button" data-mode="steps" aria-pressed="false">Step-by-step working</button>
+    <button type="button" data-mode="anim" aria-pressed="false">Animation</button>
+  </div>
+
+  {# Animation controls (Play) — shown only in Animation mode #}
+  <div id="pi-anim-controls" style="display:none;margin:2px 0 6px">
+    <button type="button" id="pi-play" style="cursor:pointer;border-radius:6px;padding:4px 12px">▶ Play</button>
+  </div>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="pi-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<script src="/static/ncangle.js"></script>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("pi-canvas"), ctx = cv.getContext("2d");
+  const SLUG = "{{ calc.slug }}";
+  let last = null;
+
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="'+SLUG+'"]');
+    if(!panel||!window.NCSkin) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input[type=number], select").forEach(el=>{
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const d=$("pi-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  // Keep the numeric box and the slider in step, both in the CURRENT unit.
+  function syncUnitLabels(){
+    const u = unit();
+    $("pi-unit-lbl").textContent = (u==="rad") ? "radians" : "degrees";
+    // slider is always in degrees internally (0..360); show value in current unit
+    const dv = +$("pi-slider").value;
+    $("pi-slider-val").textContent = (u==="rad")
+      ? (dv*Math.PI/180).toFixed(4)+" rad" : dv+"\u00B0";
+  }
+
+  // The numeric input is in the CURRENT unit; convert to degrees for the slider.
+  function inputDegrees(){
+    const u = unit(); const v = +$("pi-angle").value;
+    return (u==="rad") ? v*180/Math.PI : v;
+  }
+
+  async function update(){
+    const u = unit();
+    const body = { angle:+$("pi-angle").value, form:$("pi-form").value, angle_unit:u };
+    let data;
+    try{
+      const r=await fetch("/api/compute/"+SLUG,{method:"POST",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      data=await r.json();
+    }catch(e){ $("viz-out").textContent="compute error"; return; }
+
+    try{ if(window.NCSteps) NCSteps.render(data.steps||[]); }catch(e){}
+    if(data.disclaimer) $("pi-disc").textContent="⚠ "+data.disclaimer;
+
+    if(data.error){
+      $("viz-out").innerHTML="<b>"+data.error+"</b>";
+      last=null; ctx.clearRect(0,0,cv.width,cv.height); return;
+    }
+    $("viz-out").innerHTML = `<b>${data.result_label} = ${data.result}</b> &nbsp;<span style="opacity:.7">(${data.identity})</span>`;
+    try{ if(window.__ncExplain) __ncExplain(data.explanation); }catch(e){}
+
+    last = data;
+    draw(last, last.angle_deg);
+  }
+
+  // Static draw of the unit circle at a given angle (degrees), shading sin²/cos².
+  function draw(d, angDeg){
+    if(!window.NCSkin) return;
+    const W=cv.width,H=cv.height, cx=W/2, cy=H/2, R=Math.min(W,H)*0.36;
+    ctx.clearRect(0,0,W,H);
+    const rad = angDeg*Math.PI/180;
+    const px = cx + R*Math.cos(rad), py = cy - R*Math.sin(rad);
+
+    // axes
+    ctx.strokeStyle=NCSkin.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(cx-R-20,cy); ctx.lineTo(cx+R+20,cy);
+    ctx.moveTo(cx,cy+R+20); ctx.lineTo(cx,cy-R-20); ctx.stroke();
+
+    // cos² shaded square (horizontal leg) and sin² (vertical leg)
+    ctx.fillStyle = (NCSkin.accent||"#b34a23")+"22";
+    ctx.fillRect(cx, cy, R*Math.cos(rad), -1);      // hint line for cos
+    // cos leg
+    ctx.strokeStyle=NCSkin.accent; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(px,cy); ctx.stroke();
+    // sin leg
+    ctx.strokeStyle=NCSkin.yes||"#2f7a52";
+    ctx.beginPath(); ctx.moveTo(px,cy); ctx.lineTo(px,py); ctx.stroke();
+
+    // unit circle
+    ctx.strokeStyle=NCSkin.inkSoft; ctx.lineWidth=1.25;
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.stroke();
+
+    // radius to point
+    ctx.strokeStyle=NCSkin.ink; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(px,py); ctx.stroke();
+    ctx.fillStyle=NCSkin.ink;
+    ctx.beginPath(); ctx.arc(px,py,4,0,Math.PI*2); ctx.fill();
+
+    // labels
+    ctx.font="13px "+(NCSkin.mono||"monospace");
+    ctx.fillStyle=NCSkin.accent; ctx.textAlign="center";
+    ctx.fillText("cos θ", cx + R*Math.cos(rad)/2, cy+16);
+    ctx.fillStyle=NCSkin.yes||"#2f7a52";
+    ctx.fillText("sin θ", px + (Math.cos(rad)>=0?22:-22), cy - R*Math.sin(rad)/2);
+
+    const u = (window.NCAngle?NCAngle.current():"deg");
+    const angLbl = (u==="rad") ? (rad).toFixed(4)+" rad" : (Math.round(angDeg*100)/100)+"\u00B0";
+    $("pi-cap").textContent = "θ = "+angLbl+" · the right triangle gives cos²θ + sin²θ = 1";
+  }
+
+  // ---- Three-way mode toggle: direct | steps | anim ----
+  const REDUCED = (window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches) || false;
+  let mode = "direct", raf = null, playing = false, animStart = null;
+  const DURATION = 4200;
+
+  function stepsPanel(){ return document.getElementById("nc-steps"); }
+
+  function styleToggle(){
+    if(!window.NCSkin) return;
+    const seg = document.getElementById("pi-learn3");
+    seg.style.border = "1px solid "+NCSkin.rule;
+    seg.querySelectorAll("button").forEach(b=>{
+      const on = b.classList.contains("active");
+      b.style.cursor="pointer"; b.style.border="none"; b.style.padding="6px 14px";
+      b.style.font="13px "+(NCSkin.sans||"sans-serif");
+      b.style.background = on ? NCSkin.accent : (NCSkin.paper2||"transparent");
+      b.style.color = on ? (NCSkin.paper||"#fff") : NCSkin.ink;
+    });
+    const pb=$("pi-play");
+    if(pb){ pb.style.border="1px solid "+NCSkin.rule; pb.style.background=NCSkin.paper2||"transparent"; pb.style.color=NCSkin.ink; }
+  }
+
+  function stopPlay(){
+    if(raf){ cancelAnimationFrame(raf); raf=null; }
+    playing=false; animStart=null;
+    const pb=$("pi-play"); if(pb) pb.textContent="▶ Play";
+  }
+  function startPlay(){
+    if(raf) return; playing=true;
+    const pb=$("pi-play"); if(pb) pb.textContent="⏸ Pause";
+    function frame(ts){
+      if(animStart===null) animStart=ts;
+      const t=((ts-animStart)%DURATION)/DURATION;
+      draw(last, t*360);
+      raf=requestAnimationFrame(frame);
+    }
+    raf=requestAnimationFrame(frame);
+  }
+  function togglePlay(){ if(playing) stopPlay(); else startPlay(); }
+
+  function setMode(m){
+    mode=m; stopPlay();
+    const seg=document.getElementById("pi-learn3");
+    seg.querySelectorAll("button").forEach(b=>{
+      const on=b.getAttribute("data-mode")===m;
+      b.classList.toggle("active",on); b.setAttribute("aria-pressed",String(on));
+    });
+    const sp=stepsPanel();
+    const animCtl=$("pi-anim-controls");
+    // Canvas + caption are ALWAYS visible and interactive — the toggle only
+    // governs the answer detail (result vs working) and the Play control.
+    if(sp) sp.style.display = (m==="steps") ? "" : "none";
+    if(m==="steps"){
+      if(sp){ sp.hidden=false; sp.style.display=""; }
+      const wbtn=document.getElementById("nc-steps-working");
+      if(wbtn) wbtn.click();
+    }
+    animCtl.style.display = (m==="anim") ? "" : "none";
+    // Always render the current static frame so the picture stays live.
+    draw(last, last?last.angle_deg:0);
+    styleToggle();
+  }
+
+  document.getElementById("pi-learn3").querySelectorAll("button").forEach(b=>{
+    b.addEventListener("click", ()=>setMode(b.getAttribute("data-mode")));
+  });
+  $("pi-play").addEventListener("click", togglePlay);
+
+  // ---- live interactivity ----
+  function fromSlider(){
+    const u = unit(); const dv = +$("pi-slider").value;
+    $("pi-angle").value = (u==="rad") ? +(dv*Math.PI/180).toFixed(4) : dv;
+    syncUnitLabels(); update();
+  }
+  function fromInput(){
+    const dg = inputDegrees();
+    $("pi-slider").value = ((dg%360)+360)%360;
+    syncUnitLabels(); update();
+  }
+
+  $("pi-slider").addEventListener("input", fromSlider);
+  $("pi-angle").addEventListener("input", fromInput);
+  $("pi-form").addEventListener("change", update);
+
+  // Re-run when the student flips degrees/radians: reinterpret the numeric box
+  // value in the new unit (keep the same underlying angle), then recompute.
+  if(window.NCAngle){
+    NCAngle.onChange(function(newUnit){
+      // Preserve the underlying angle: slider is the source of truth (degrees).
+      const dv = +$("pi-slider").value;
+      $("pi-angle").value = (newUnit==="rad") ? +(dv*Math.PI/180).toFixed(4) : dv;
+      syncUnitLabels(); update();
+    });
+  }
+
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", styleToggle);
+  window.addEventListener("nc-theme-change", ()=>{ if(last && mode==="anim") draw(last, last.angle_deg); });
+
+  styleFields(); syncUnitLabels();
+  update().then(()=>{
+    // The shared _steps.html has its own Direct/Working sub-toggle; our 3-way
+    // toggle replaces it, so hide that inner toggle to avoid duplication.
+    const innerToggle=document.querySelector("#nc-steps .nc-steps-toggle");
+    if(innerToggle) innerToggle.style.display="none";
+    setMode("direct");
+  });
+})();
+</script>
