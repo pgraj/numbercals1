@@ -1,0 +1,317 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+
+  {# Angle-unit toggle on its own row (compact, like trig-period-amplitude) #}
+  <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
+
+  <div class="viz-inputs" style="align-items:flex-start;gap:70px">
+    <label>
+      <span style="display:block;white-space:nowrap">Special angle
+        <span id="ev-unit-lbl" style="opacity:.7">(degrees)</span></span>
+      <span class="nc-field" style="display:block">
+        <select id="ev-angle" style="width:120px"></select>
+      </span>
+    </label>
+    <label>
+      <span style="display:block;white-space:nowrap">Show by</span>
+      <span class="nc-field" style="display:block">
+        <select id="ev-method" style="width:220px">
+          <option value="special-triangle" selected>Special triangle</option>
+          <option value="unit-circle">Unit-circle point</option>
+          <option value="cast">CAST quadrant rule</option>
+          <option value="exact-value">Exact value only</option>
+        </select>
+      </span>
+    </label>
+  </div>
+
+  {# Interactive picture — ALWAYS visible #}
+  <canvas id="ev-canvas" width="640" height="380"
+          style="display:block;width:100%;height:auto;max-width:520px;margin:8px auto 0"></canvas>
+  <p class="viz-caption" id="ev-cap"
+     style="font-size:.9rem;margin-top:.5rem;opacity:.85;text-align:center"></p>
+
+  <div class="viz-out" id="viz-out" style="margin-top:10px"></div>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="ev-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+{# Three-way learning toggle — OUTSIDE the viz-panel box, above FAQ #}
+<div class="nc-learn3" id="ev-learn3" role="group" aria-label="Answer detail"
+     style="display:inline-flex;border-radius:8px;overflow:hidden;margin:12px 0 6px">
+  <button type="button" data-mode="direct" class="active" aria-pressed="true">Direct answer</button>
+  <button type="button" data-mode="steps" aria-pressed="false">Step-by-step working</button>
+  <button type="button" data-mode="anim" aria-pressed="false">Animation</button>
+</div>
+
+{# Animation controls (Play) — shown only in Animation mode #}
+<div id="ev-anim-controls" style="display:none;margin:2px 0 6px">
+  <button type="button" id="ev-play" style="cursor:pointer;border-radius:6px;padding:4px 12px">▶ Play</button>
+  <p id="ev-anim-note" style="font-size:.82rem;margin:6px 0 0;opacity:.8;max-width:520px"></p>
+</div>
+
+<script src="/static/ncangle.js"></script>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("ev-canvas"), ctx = cv.getContext("2d");
+  const SLUG = "{{ calc.slug }}";
+  let last = null;
+
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
+
+  // Special angles in degrees + their π-fraction labels.
+  const ANGLES = [
+    [0,"0"],[30,"π/6"],[45,"π/4"],[60,"π/3"],[90,"π/2"],
+    [120,"2π/3"],[135,"3π/4"],[150,"5π/6"],[180,"π"],
+    [210,"7π/6"],[225,"5π/4"],[240,"4π/3"],[270,"3π/2"],
+    [300,"5π/3"],[315,"7π/4"],[330,"11π/6"],[360,"2π"]
+  ];
+  function fillAngleOptions(){
+    const sel=$("ev-angle"); const keep=sel.value; sel.innerHTML="";
+    const rad=unit()==="rad";
+    ANGLES.forEach(([deg,pi])=>{
+      const o=document.createElement("option");
+      o.value=deg; o.textContent = rad ? pi : deg+"\u00B0";
+      sel.appendChild(o);
+    });
+    sel.value = keep || "30";
+  }
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="'+SLUG+'"]');
+    if(!panel||!window.NCSkin) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const n=$("ev-anim-note"); if(n) n.style.color=NCSkin.inkSoft;
+    const d=$("ev-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  function syncUnitLabels(){
+    $("ev-unit-lbl").textContent = (unit()==="rad") ? "(radians)" : "(degrees)";
+  }
+
+  async function update(){
+    const u = unit();
+    const degVal = +$("ev-angle").value;
+    const sendAngle = (u==="rad") ? (degVal*Math.PI/180) : degVal;
+    const body = { angle:sendAngle, method:$("ev-method").value, angle_unit:u };
+    let data;
+    try{
+      const r=await fetch("/api/compute/"+SLUG,{method:"POST",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      data=await r.json();
+    }catch(e){ $("viz-out").textContent="compute error"; return; }
+
+    try{ if(window.NCSteps) NCSteps.render(data.steps||[]); }catch(e){}
+    if(data.disclaimer) $("ev-disc").textContent="⚠ "+data.disclaimer;
+
+    if(data.error){
+      $("viz-out").innerHTML="<b>"+data.error+"</b>";
+        last=null; ctx.clearRect(0,0,cv.width,cv.height); return;
+    }
+    const tan = data.tan_surd;
+    $("viz-out").innerHTML =
+      `<div style="line-height:1.7"><b>sin θ = ${data.sin_surd}</b> &nbsp;&middot;&nbsp; <b>cos θ = ${data.cos_surd}</b></div>`+
+      `<div style="line-height:1.7"><b>tan θ = ${tan}</b></div>`;
+    try{ if(window.__ncExplain) __ncExplain(data.explanation); }catch(e){}
+
+    last = data;
+    draw(last, last.angle_deg);
+  }
+
+  function S(){ return window.NCSkin || {}; }
+
+  // Draw the unit circle at angDeg (degrees). `live` true during animation
+  // updates the on-canvas angle/value readout to the swept angle.
+  function draw(d, angDeg, live){
+    if(!window.NCSkin || !d){ ctx.clearRect(0,0,cv.width,cv.height); return; }
+    const sk=S();
+    const W=cv.width,H=cv.height, cx=W/2, cy=H/2, R=Math.min(W,H)*0.40;
+    ctx.clearRect(0,0,W,H);
+    const rad = angDeg*Math.PI/180;
+    const px = cx + R*Math.cos(rad), py = cy - R*Math.sin(rad);
+    const ink=sk.ink||"#222", soft=sk.inkSoft||"#888", acc=sk.accent||"#b34a23",
+          yes=sk.yes||"#2f7a52", rule=sk.rule||"#ddd";
+    const method = d.method;
+
+    // axes
+    ctx.strokeStyle=rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(cx-R-22,cy); ctx.lineTo(cx+R+22,cy);
+    ctx.moveTo(cx,cy+R+22); ctx.lineTo(cx,cy-R-22); ctx.stroke();
+
+    // unit circle
+    ctx.strokeStyle=soft; ctx.lineWidth=1.25;
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.stroke();
+
+    // swept angle arc (anticlockwise from +x axis)
+    ctx.strokeStyle=acc; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(cx,cy,30,0,-rad,true); ctx.stroke();
+
+    // special-triangle: drop the reference right-triangle
+    if(method==="special-triangle" && !d.axis){
+      ctx.strokeStyle=acc; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(px,cy); ctx.stroke();   // cos leg
+      ctx.strokeStyle=yes;
+      ctx.beginPath(); ctx.moveTo(px,cy); ctx.lineTo(px,py); ctx.stroke();   // sin leg
+      ctx.fillStyle=acc; ctx.font="13px "+(sk.mono||"monospace"); ctx.textAlign="center";
+      ctx.fillText("cos θ", cx + R*Math.cos(rad)/2, cy+16);
+      ctx.fillStyle=yes;
+      ctx.fillText("sin θ", px + (Math.cos(rad)>=0?24:-24), cy - R*Math.sin(rad)/2);
+    }
+
+    // CAST quadrant letters
+    if(method==="cast"){
+      ctx.fillStyle=soft; ctx.font="bold 15px "+(sk.sans||"sans-serif");
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText("A", cx+R*0.62, cy-R*0.62);
+      ctx.fillText("S", cx-R*0.62, cy-R*0.62);
+      ctx.fillText("T", cx-R*0.62, cy+R*0.62);
+      ctx.fillText("C", cx+R*0.62, cy+R*0.62);
+      ctx.textBaseline="alphabetic";
+    }
+
+    // radius + terminal point
+    ctx.strokeStyle=ink; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(px,py); ctx.stroke();
+    ctx.fillStyle=ink; ctx.beginPath(); ctx.arc(px,py,4,0,Math.PI*2); ctx.fill();
+
+    // unit-circle coordinate label
+    if(method==="unit-circle"){
+      ctx.fillStyle=ink; ctx.font="13px "+(sk.mono||"monospace");
+      ctx.textAlign = px>=cx?"left":"right";
+      ctx.fillText("("+d.cos+", "+d.sin+")", px+(px>=cx?8:-8), py-8);
+    }
+
+    // caption / live readout
+    const u = unit();
+    const angLbl = (u==="rad") ? rad.toFixed(4)+" rad" : (Math.round(angDeg*100)/100)+"\u00B0";
+    if(live){
+      ctx.fillStyle=acc; ctx.font="14px "+(sk.mono||"monospace"); ctx.textAlign="left";
+      ctx.fillText("θ = "+angLbl, 12, 22);
+      ctx.fillStyle=ink;
+      ctx.fillText("sin θ = "+Math.sin(rad).toFixed(4), 12, 42);
+      ctx.fillText("cos θ = "+Math.cos(rad).toFixed(4), 12, 60);
+      const tv=Math.cos(rad);
+      ctx.fillText("tan θ = "+(Math.abs(tv)<1e-9?"undefined":Math.tan(rad).toFixed(4)), 12, 78);
+    }
+    $("ev-cap").textContent = "θ = "+angLbl+" · the terminal ray meets the unit circle at (cos θ, sin θ)";
+  }
+
+  // ---- Three-way mode toggle: direct | steps | anim ----
+  let mode="direct", raf=null, playing=false, animStart=null;
+  const DURATION=4200;
+  const ANIM_NOTE = "In trigonometry a positive angle is measured anticlockwise from the "+
+    "positive x-axis (the initial side), so the ray sweeps anticlockwise as θ grows. "+
+    "A clockwise sweep would be a negative angle.";
+
+  function stepsPanel(){ return document.getElementById("nc-steps"); }
+
+  function styleToggle(){
+    if(!window.NCSkin) return;
+    const seg=$("ev-learn3");
+    seg.style.border="1px solid "+NCSkin.rule;
+    seg.querySelectorAll("button").forEach(b=>{
+      const on=b.classList.contains("active");
+      b.style.cursor="pointer"; b.style.border="none"; b.style.padding="6px 14px";
+      b.style.font="13px "+(NCSkin.sans||"sans-serif");
+      b.style.background = on ? NCSkin.accent : (NCSkin.paper2||"transparent");
+      b.style.color = on ? (NCSkin.paper||"#fff") : NCSkin.ink;
+    });
+    const pb=$("ev-play");
+    if(pb){ pb.style.border="1px solid "+NCSkin.rule; pb.style.background=NCSkin.paper2||"transparent"; pb.style.color=NCSkin.ink; }
+  }
+
+  function stopPlay(){
+    if(raf){ cancelAnimationFrame(raf); raf=null; }
+    playing=false; animStart=null;
+    const pb=$("ev-play"); if(pb) pb.textContent="▶ Play";
+    if(last) draw(last, last.angle_deg);   // settle on the final angle
+  }
+  function startPlay(){
+    if(raf||!last) return; playing=true;
+    const pb=$("ev-play"); if(pb) pb.textContent="⏸ Pause";
+    const target = last.angle_deg;
+    function frame(ts){
+      if(animStart===null) animStart=ts;
+      let t=(ts-animStart)/DURATION;
+      if(t>=1){ t=1; }
+      // sweep 0 -> target, anticlockwise, incrementing the live readout
+      draw(last, target*t, true);
+      if(t<1){ raf=requestAnimationFrame(frame); }
+      else { raf=null; playing=false; const b=$("ev-play"); if(b)b.textContent="▶ Play"; }
+    }
+    raf=requestAnimationFrame(frame);
+  }
+  function togglePlay(){ if(playing) stopPlay(); else startPlay(); }
+
+  function setMode(m){
+    mode=m; stopPlay();
+    const seg=$("ev-learn3");
+    seg.querySelectorAll("button").forEach(b=>{
+      const on=b.getAttribute("data-mode")===m;
+      b.classList.toggle("active",on); b.setAttribute("aria-pressed",String(on));
+    });
+    const sp=stepsPanel(), animCtl=$("ev-anim-controls");
+    if(sp) sp.style.display = (m==="steps") ? "" : "none";
+    if(m==="steps" && sp){
+      sp.hidden=false; sp.style.display="";
+      const wbtn=document.getElementById("nc-steps-working");
+      if(wbtn) wbtn.click();
+    }
+    animCtl.style.display = (m==="anim") ? "" : "none";
+    if(m==="anim") $("ev-anim-note").textContent = ANIM_NOTE;
+    draw(last, last?last.angle_deg:0);
+    styleToggle();
+  }
+
+  $("ev-learn3").querySelectorAll("button").forEach(b=>{
+    b.addEventListener("click", ()=>setMode(b.getAttribute("data-mode")));
+  });
+  $("ev-play").addEventListener("click", togglePlay);
+
+  // ---- live interactivity ----
+  $("ev-angle").addEventListener("change", ()=>{ if(mode==="anim") setMode("anim"); update(); });
+  $("ev-method").addEventListener("change", update);
+
+  if(window.NCAngle){
+    NCAngle.onChange(function(){ fillAngleOptions(); syncUnitLabels(); update(); });
+  }
+
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", styleToggle);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last, last.angle_deg, mode==="anim"&&playing); });
+
+  fillAngleOptions(); styleFields(); syncUnitLabels();
+  update().then(()=>{
+    const innerToggle=document.querySelector("#nc-steps .nc-steps-toggle");
+    if(innerToggle) innerToggle.style.display="none";
+    setMode("direct");
+  });
+})();
+</script>
