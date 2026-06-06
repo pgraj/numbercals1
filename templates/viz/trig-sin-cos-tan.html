@@ -1,8 +1,10 @@
 <link rel="stylesheet" href="/static/nclearn.css">
 <div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
   <div class="viz-inputs">
-    <label>Angle \u03b8 (degrees)
-      <span class="nc-field"><input id="sc-ang" type="number" value="30" step="any"></span></label>
+    <label id="sc-ang-l"><span style="display:block;white-space:nowrap">Angle &theta;
+        <span id="sc-unit-lbl" style="opacity:.7">(deg)</span></span>
+      <span class="nc-field" style="display:block"><input id="sc-ang" type="number" value="30" step="any"></span></label>
     <label>Known side
       <span class="nc-field"><select id="sc-known"><option value="hyp" selected>Hypotenuse</option><option value="adj">Adjacent</option><option value="opp">Opposite</option></select></span></label>
     <label>Its length
@@ -40,11 +42,14 @@
 })();
 </script>
 
+<script src="/static/ncangle.js"></script>
+
 <script>
 (function(){
   const $ = id => document.getElementById(id);
   const slug = "{{ calc.slug }}";
   const P = "sc";
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
   const panel = document.querySelector('.viz-panel[data-slug="'+slug+'"]');
   let last = null;
 
@@ -61,7 +66,7 @@
   }
 
   function buildBody(){
-    return { angle_deg:$("sc-ang").value, known_type:$("sc-known").value, known_val:$("sc-val").value, want_type:$("sc-want").value };
+    return { angle_deg:$("sc-ang").value, known_type:$("sc-known").value, known_val:$("sc-val").value, want_type:$("sc-want").value, angle_unit:unit() };
   }
 
   async function update(){
@@ -84,6 +89,9 @@
   }
 
   function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
+  // θ arc label in the chosen unit (diagram geometry stays in degrees).
+  function angLabel(deg){ return (unit()==="rad") ? (fmt(deg*Math.PI/180)+" rad") : (fmt(deg)+"\u00b0"); }
+  function syncUnitLabel(){ $("sc-unit-lbl").textContent = (unit()==="rad") ? "(rad)" : "(deg)"; }
 
 
   function drawDiagram(d){
@@ -112,7 +120,7 @@
     ctx.strokeStyle=soft; ctx.lineWidth=1; ctx.strokeRect(Bx,By-12,12,12);
     ctx.strokeStyle=accent; ctx.beginPath(); ctx.arc(Cx,Cy,26,Math.PI, Math.PI-th, true); ctx.stroke();
     ctx.fillStyle=ink; ctx.font="13px "+(s.sans||"sans-serif"); ctx.textAlign="center";
-    ctx.fillStyle=accent; ctx.font="bold 14px "+(s.sans||"sans-serif"); ctx.fillText("\u03b8="+fmt(ang)+"\u00b0", Cx-44, Cy-8);
+    ctx.fillStyle=accent; ctx.font="bold 14px "+(s.sans||"sans-serif"); ctx.fillText("\u03b8="+angLabel(ang), Cx-44, Cy-8);
     // annotate known + result values
     ctx.font="12px "+(s.sans||"sans-serif");
     ctx.fillStyle=accent; ctx.textAlign="center";
@@ -137,8 +145,20 @@
   }
 
   ["sc-ang","sc-known","sc-val","sc-want"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+
+  if(window.NCAngle){
+    NCAngle.onChange(function(newUnit){
+      const v = parseFloat($("sc-ang").value);
+      if(!isNaN(v)){
+        if(newUnit==="rad") $("sc-ang").value = +(v*Math.PI/180).toFixed(4);
+        else                $("sc-ang").value = +(v*180/Math.PI).toFixed(4);
+      }
+      syncUnitLabel(); update();
+    });
+  }
+
   window.addEventListener("nc-theme-change", styleFields);
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });
-  styleFields();  update();
+  styleFields(); syncUnitLabel(); update();
 })();
 </script>

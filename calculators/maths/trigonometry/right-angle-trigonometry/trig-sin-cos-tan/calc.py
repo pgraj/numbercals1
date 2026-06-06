@@ -13,6 +13,20 @@ DISCLAIMER = (
     "independently before relying on them for academic or professional decisions."
 )
 
+
+def _ang_tex(deg, unit):
+    """Angle as LaTeX for step math, in the chosen unit."""
+    if unit == "rad":
+        return ("%.4f" % math.radians(deg)).rstrip("0").rstrip(".") + r"\,\text{rad}"
+    return _fmt(deg) + r"^\circ"
+
+
+def _ang_plain(deg, unit):
+    """Angle as plain text for notes, in the chosen unit."""
+    if unit == "rad":
+        return ("%.4f" % math.radians(deg)).rstrip("0").rstrip(".") + " rad"
+    return _fmt(deg) + "\u00b0"
+
 # Which ratio links a (known, wanted) pair, and the multiply/divide direction.
 # key: (known, wanted) -> (ratio_name, formula_text, fn)
 def _solve(angle, known_type, known_val, want_type):
@@ -50,17 +64,22 @@ def _solve(angle, known_type, known_val, want_type):
     ],
     viz_template="viz/trig-sin-cos-tan.html",
 )
-def compute(angle_deg=None, known_type="hyp", known_val=None, want_type="opp"):
+def compute(angle_deg=None, known_type="hyp", known_val=None, want_type="opp", angle_unit="deg"):
     try:
         if angle_deg is None or angle_deg == "" or known_val in (None, ""):
             return _err("Enter the angle and one known side.")
-        angle = float(angle_deg)
+        unit = "rad" if str(angle_unit) == "rad" else "deg"
+        a_in = float(angle_deg)
+        angle = math.degrees(a_in) if unit == "rad" else a_in  # internal = degrees
         known_val = float(known_val)
         known_type = (known_type or "hyp").lower()
         want_type = (want_type or "opp").lower()
 
         if not (0 < angle < 90):
-            return _err("Enter an acute angle strictly between 0° and 90°.")
+            msg = ("Enter an acute angle strictly between 0 and \u03c0/2 rad (\u2248 1.5708)."
+                   if unit == "rad" else
+                   "Enter an acute angle strictly between 0\u00b0 and 90\u00b0.")
+            return _err(msg)
         if known_val <= 0:
             return _err("The known side must be greater than zero.")
         if known_type == want_type:
@@ -84,11 +103,11 @@ def compute(angle_deg=None, known_type="hyp", known_val=None, want_type="opp"):
              "note": "Rearranged so the unknown side is the subject."},
             {"label": "Substitute and evaluate",
              "math": r"\(\text{%s} = %s\)" % (nm[want_type], _fmt(value)),
-             "note": "θ = %s°, %s = %s." % (_fmt(angle), nm[known_type], _fmt(known_val))},
+             "note": "\u03b8 = %s, %s = %s." % (_ang_plain(angle, unit), nm[known_type], _fmt(known_val))},
         ]
         return {
             "result": _fmt(value),
-            "angle": angle, "known_type": known_type, "known_val": known_val,
+            "angle": angle, "angle_unit": unit, "known_type": known_type, "known_val": known_val,
             "want_type": want_type, "value": round(value, 6), "ratio": ratio,
             "steps": steps,
             "explanation": [
@@ -99,8 +118,8 @@ def compute(angle_deg=None, known_type="hyp", known_val=None, want_type="opp"):
                          "hypotenuse, tangent for opposite and adjacent."},
                 {"heading": "Rearranging safely",
                  "body": "If the unknown is on top of the fraction you multiply; if "
-                         "it is on the bottom you divide. Keeping the angle in degrees "
-                         "mode on your calculator matters here."},
+                         "it is on the bottom you divide. Make sure your calculator is "
+                         "in the same angle mode (degrees or radians) as the question."},
             ],
             "disclaimer": DISCLAIMER,
         }

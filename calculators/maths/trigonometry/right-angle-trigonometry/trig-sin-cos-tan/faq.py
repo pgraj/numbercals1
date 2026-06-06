@@ -11,11 +11,13 @@ register_faqs("trig-sin-cos-tan", [
           "first, then the right ratio is obvious."},
     {"q": "Can you give a worked example?",
      "a": "With an angle of 30° and a hypotenuse of 10, to find the opposite side "
-          "use opposite = hypotenuse × sin θ = 10 × sin 30° = 10 × 0.5 = 5."},
+          "use opposite = hypotenuse × sin θ = 10 × sin 30° = 10 × 0.5 = 5. The same "
+          "angle in radians is 30° = π/6 ≈ 0.5236 rad; switch the toggle and the "
+          "working re-derives unchanged."},
     {"q": "Do I multiply or divide?",
      "a": "If the unknown is on the top of the ratio you multiply; if it is on "
-          "the bottom you divide. Always keep your calculator in degrees mode for "
-          "angles measured in degrees."},
+          "the bottom you divide. Always keep your calculator in the same angle "
+          "mode — degrees or radians — as the angle you were given."},
     {"q": "Where is this used in real life?",
      "a": "Builders work out ramp and roof lengths, engineers size cables and "
           "supports, surveyors measure inaccessible distances, and computer "
