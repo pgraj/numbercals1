@@ -7,19 +7,31 @@
    pages and split ranking signal. base_url ends with '/', path starts with
    '/', so trim one slash when joining. #}
 {% set _canonical = (request.base_url | string).rstrip('/') ~ request.url.path %}
+{% set _base = (request.base_url | string).rstrip('/') %}
 <link rel="canonical" href="{{ _canonical }}">
 <meta name="robots" content="index, follow, max-image-preview:large">
+
+{# ---- Favicons / app icons (files live in /static) ---- #}
+<link rel="icon" href="{{ _base }}/static/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="{{ _base }}/static/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="{{ _base }}/static/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="{{ _base }}/static/apple-touch-icon.png">
+<link rel="manifest" href="{{ _base }}/static/site.webmanifest">
+<meta name="theme-color" content="#b34a23">
 
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="{{ site_name }}">
 <meta property="og:title" content="{{ page_title | default(site_name) }}">
 <meta property="og:description" content="{{ page_description | default(tagline) }}">
 <meta property="og:url" content="{{ _canonical }}">
-
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="{{ _base }}/static/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="{{ site_name }} — {{ tagline }}">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{{ page_title | default(site_name) }}">
 <meta name="twitter:description" content="{{ page_description | default(tagline) }}">
-
+<meta name="twitter:image" content="{{ _base }}/static/og-image.png">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -31,4 +43,3 @@
   "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
 }
 </script>
-
