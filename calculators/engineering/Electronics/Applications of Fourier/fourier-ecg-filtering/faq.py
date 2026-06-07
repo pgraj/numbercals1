@@ -1,0 +1,9 @@
+from core.faqs import register_faqs
+
+register_faqs("fourier-ecg-filtering", [
+    {"q": "How does a hospital ECG machine actually clean the signal?", "a": "Exactly the way this tool shows: it transforms the noisy heartbeat into the frequency domain, keeps the low frequencies that carry the heart's rhythm, discards the high-frequency noise and the 50/60 Hz mains hum, then transforms back. What the cardiologist sees is the filtered output."},
+    {"q": "What is the 50 Hz spike in the spectrum?", "a": "That is interference picked up from the mains electricity supply (60 Hz in the Americas). It is everywhere in a hospital, and it shows up as a sharp spike in the ECG spectrum. A 'notch' filter removes exactly that frequency — try lowering the cutoff here and watch the hum vanish from the output."},
+    {"q": "Why not just average the signal to remove noise?", "a": "Crude averaging would also blur the sharp QRS spike that doctors rely on to measure heart timing. Fourier filtering is surgical: it removes specific unwanted frequencies while protecting the ones that carry diagnostic information. That selectivity is why frequency-domain filtering is the standard."},
+    {"q": "Could I trust this exact output for a real diagnosis?", "a": "No — this is a teaching toy with a simplified heartbeat model and a brick-wall filter. Real ECG processing uses carefully designed filters validated to clinical standards. The value here is intuition: seeing why filtering happens in the frequency domain at all."},
+    {"q": "Where else is this 'transform, mask, transform back' trick used?", "a": "Everywhere. Noise reduction in audio recordings, removing rumble from seismographs, cleaning up radio signals, and de-noising scientific images all use the same three-step recipe. Master it once here and you understand a huge swathe of signal processing."},
+])

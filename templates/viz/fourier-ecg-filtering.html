@@ -1,0 +1,608 @@
+<style>
+/* Fourier viz — self-contained scoped styles (carved from the original lab). */
+<style>
+/* ============================== SCOPED STYLES ============================== */
+.ft-top-disclaimer, .ft-bottom-disclaimer {
+  background: #fff8e1; border: 1px solid #f6c453; border-left: 6px solid #b8860b;
+  padding: 1rem 1.25rem; margin: 1rem 0 2rem; border-radius: 6px;
+  font: 0.95rem/1.55 'Source Sans 3', 'IBM Plex Sans', system-ui, sans-serif; color: #4a3500;
+}
+.ft-bottom-disclaimer { margin-top: 3rem; }
+.ft-bottom-disclaimer h3 { margin: 0 0 0.5rem; font-size: 1.1rem; color: #6b4a00; }
+.ft-bottom-disclaimer ul { margin: 0; padding-left: 1.25rem; }
+.ft-bottom-disclaimer li { margin-bottom: 0.4rem; }
+
+.ft-header { border-bottom: 1px solid #d9d4c7; padding-bottom: 1.5rem; margin-bottom: 2rem; }
+.ft-eyebrow { letter-spacing: 0.18em; text-transform: uppercase; font-size: 0.72rem; color: #8b1a1a; margin: 0; font-weight: 600; }
+.ft-title { font: 700 2.2rem/1.15 'Fraunces', 'Cormorant Garamond', Georgia, serif; margin: 0.4rem 0 0.8rem; color: #0f172a; letter-spacing: -0.01em; }
+.ft-lede { font: 1.05rem/1.6 'Source Sans 3', 'IBM Plex Sans', system-ui, sans-serif; color: #334155; max-width: 56rem; margin: 0 0 1rem; }
+.ft-citation-block { font: 0.9rem/1.55 'Source Sans 3', system-ui, sans-serif; color: #475569; background: #f8fafc; padding: 0.75rem 1rem; border-left: 3px solid #0d4f5c; border-radius: 4px; }
+.ft-citation-block a { color: #0d4f5c; text-decoration: underline; }
+
+/* TABS */
+.ft-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; border-bottom: 2px solid #0f172a; margin-bottom: 1.5rem; padding-bottom: 0; }
+.ft-tab {
+  background: transparent; border: none; padding: 0.7rem 1.1rem; cursor: pointer;
+  font: 600 0.92rem 'Source Sans 3', system-ui, sans-serif; color: #64748b;
+  border-bottom: 3px solid transparent; margin-bottom: -2px; transition: color .15s, border-color .15s;
+}
+.ft-tab:hover { color: #0f172a; }
+.ft-tab.is-active { color: #8b1a1a; border-bottom-color: #8b1a1a; }
+
+/* PANELS */
+.ft-panel { display: none; animation: ft-fade .25s ease-out; }
+.ft-panel.is-active { display: block; }
+@keyframes ft-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.ft-panel-title { font: 600 1.5rem/1.2 'Fraunces', Georgia, serif; color: #0f172a; margin: 0 0 1.25rem; }
+
+/* FORMULA CARD */
+.ft-formula-card {
+  background: linear-gradient(180deg, #fdfcf8 0%, #f5f1e8 100%);
+  border: 1px solid #d9d4c7; border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+}
+.ft-formula-label { font: 600 0.78rem 'Source Sans 3', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.1em; color: #8b1a1a; margin: 0 0 0.5rem; }
+.ft-formula { font-size: 1.1rem; overflow-x: auto; padding: 0.5rem 0; color: #0f172a; }
+.ft-symbols { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; margin: 0.5rem 0 0.75rem; font: 0.9rem 'Source Sans 3', system-ui, sans-serif; color: #334155; }
+.ft-symbols b { color: #0f172a; font-family: 'Fraunces', Georgia, serif; }
+.ft-citation { font: italic 0.85rem/1.55 'Source Sans 3', system-ui, sans-serif; color: #475569; margin: 0.75rem 0 0; padding-top: 0.75rem; border-top: 1px dashed #d9d4c7; }
+.ft-citation a { color: #0d4f5c; }
+
+/* LAB */
+.ft-lab { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+.ft-controls { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; margin-bottom: 1rem; align-items: flex-end; }
+.ft-controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.85rem 1.25rem; }
+.ft-controls label { display: flex; flex-direction: column; font: 600 0.78rem 'Source Sans 3', system-ui, sans-serif; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; gap: 0.3rem; min-width: 150px; }
+.ft-controls label output { font: 600 0.95rem 'JetBrains Mono', 'Courier New', monospace; color: #0f172a; text-transform: none; letter-spacing: 0; }
+.ft-controls input[type=range] { width: 100%; accent-color: #8b1a1a; }
+.ft-checks { flex-direction: row !important; gap: 0.75rem !important; align-items: center !important; flex-wrap: wrap; }
+.ft-checks input { accent-color: #8b1a1a; }
+.ft-play, .ft-add, .ft-preset, .ft-row-del {
+  background: #0f172a; color: #f5f1e8; border: none; padding: 0.55rem 1rem; border-radius: 4px; cursor: pointer;
+  font: 600 0.82rem 'Source Sans 3', system-ui, sans-serif; letter-spacing: 0.05em; transition: background .15s;
+}
+.ft-play:hover, .ft-add:hover, .ft-preset:hover { background: #8b1a1a; }
+.ft-play.is-playing { background: #8b1a1a; }
+.ft-preset { background: #0d4f5c; }
+.ft-row-del { background: #b91c1c; padding: 0.35rem 0.6rem; font-size: 0.75rem; }
+
+.ft-preset-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.5rem 0 1rem; font: 600 0.82rem 'Source Sans 3', system-ui, sans-serif; color: #475569; }
+.ft-preset-row > span { margin-right: 0.5rem; }
+
+.ft-rows { display: flex; flex-direction: column; gap: 0.5rem; margin: 0.75rem 0; }
+.ft-row { display: grid; grid-template-columns: auto 1fr 1fr 1fr auto; gap: 0.75rem; align-items: center; padding: 0.5rem 0.75rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; }
+.ft-row > span { font: 600 0.8rem 'JetBrains Mono', monospace; color: #8b1a1a; min-width: 28px; }
+.ft-row label { display: flex; flex-direction: column; font: 600 0.7rem 'Source Sans 3', system-ui, sans-serif; color: #64748b; text-transform: uppercase; gap: 0.2rem; }
+.ft-row label output { font: 600 0.85rem 'JetBrains Mono', monospace; color: #0f172a; text-transform: none; }
+.ft-row input[type=range] { accent-color: #8b1a1a; }
+
+/* CANVAS */
+.ft-canvas {
+  display: block; width: 100%; max-width: 100%; height: auto;
+  background: #0f172a; border-radius: 6px; margin: 0.5rem 0;
+}
+.ft-canvas-spectrum { background: #1e293b; }
+.ft-explain { font: 0.93rem/1.6 'Source Sans 3', system-ui, sans-serif; color: #334155; margin: 0.75rem 0 0; padding: 0.75rem 1rem; background: #f8fafc; border-left: 3px solid #8b1a1a; border-radius: 4px; }
+
+/* CONCEPTS */
+.ft-concepts { margin: 2.5rem 0 1.5rem; }
+.ft-concepts h2 { font: 600 1.5rem 'Fraunces', Georgia, serif; color: #0f172a; margin: 0 0 1rem; }
+.ft-concept-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+.ft-concept-grid article { background: #fdfcf8; border: 1px solid #d9d4c7; border-radius: 6px; padding: 1rem 1.1rem; }
+.ft-concept-grid h3 { font: 600 1.02rem 'Fraunces', Georgia, serif; color: #8b1a1a; margin: 0 0 0.35rem; }
+.ft-concept-grid p { font: 0.9rem/1.55 'Source Sans 3', system-ui, sans-serif; color: #334155; margin: 0; }
+
+/* APPLICATIONS TAB */
+.ft-apps-sandbox {
+  background: linear-gradient(135deg, #0d4f5c 0%, #155e75 100%); color: #f0fdfa;
+  padding: 1rem 1.25rem; border-radius: 8px; margin-bottom: 2rem;
+  font: 0.95rem/1.55 'Source Sans 3', system-ui, sans-serif;
+}
+.ft-apps-sandbox strong { color: #fbbf24; }
+.ft-apps-sandbox em { color: #67e8f9; font-style: normal; font-weight: 600; }
+
+.ft-app {
+  background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px;
+  padding: 1.5rem 1.5rem 1.75rem; margin-bottom: 2.5rem;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.03), 0 8px 24px -16px rgba(15,23,42,0.15);
+}
+.ft-app-head { display: flex; gap: 1.25rem; align-items: flex-start; margin-bottom: 1.25rem; }
+.ft-app-num {
+  font: 800 1.8rem 'Fraunces', Georgia, serif; color: #8b1a1a;
+  background: linear-gradient(135deg, #fdfcf8 0%, #f5f1e8 100%);
+  border: 1px solid #d9d4c7; border-radius: 8px;
+  padding: 0.4rem 0.85rem; min-width: 3rem; text-align: center; line-height: 1;
+}
+.ft-app-head h3 { font: 600 1.35rem 'Fraunces', Georgia, serif; color: #0f172a; margin: 0 0 0.4rem; }
+.ft-app-hook { font: 1rem/1.6 'Source Sans 3', system-ui, sans-serif; color: #334155; margin: 0; }
+.ft-app-hook em { color: #8b1a1a; font-style: italic; }
+
+.ft-try-this {
+  background: #ecfeff; border-left: 4px solid #0891b2; border-radius: 4px;
+  padding: 0.9rem 1.1rem; margin: 1rem 0;
+}
+.ft-try-this h4 { font: 600 0.95rem 'Source Sans 3', system-ui, sans-serif; color: #0e7490; margin: 0 0 0.5rem; }
+.ft-try-this ol { margin: 0; padding-left: 1.25rem; font: 0.92rem/1.6 'Source Sans 3', system-ui, sans-serif; color: #164e63; }
+.ft-try-this li { margin-bottom: 0.3rem; }
+.ft-try-this b { color: #0e7490; }
+
+.ft-canvas-label {
+  font: 600 0.78rem 'Source Sans 3', system-ui, sans-serif; text-transform: uppercase;
+  letter-spacing: 0.08em; color: #64748b; margin: 0.85rem 0 0.3rem;
+}
+.ft-canvas-app { height: auto; }
+
+.ft-watch-out {
+  background: #fef3c7; border-left: 4px solid #d97706; border-radius: 4px;
+  padding: 0.9rem 1.1rem; margin: 1rem 0;
+}
+.ft-watch-out h4 { font: 600 0.95rem 'Source Sans 3', system-ui, sans-serif; color: #92400e; margin: 0 0 0.5rem; }
+.ft-watch-out ul { margin: 0; padding-left: 1.25rem; font: 0.92rem/1.6 'Source Sans 3', system-ui, sans-serif; color: #78350f; }
+.ft-watch-out li { margin-bottom: 0.3rem; }
+.ft-watch-out b { color: #92400e; }
+
+.ft-do-dont { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; margin: 1rem 0; }
+.ft-do-dont > div { padding: 0.85rem 1.1rem; border-radius: 6px; }
+.dd-do { background: #ecfdf5; border-left: 4px solid #059669; }
+.dd-dont { background: #fef2f2; border-left: 4px solid #dc2626; }
+.dd-do h5, .dd-dont h5 { font: 600 0.85rem 'Source Sans 3', system-ui, sans-serif; margin: 0 0 0.3rem; }
+.dd-do h5 { color: #065f46; }
+.dd-dont h5 { color: #991b1b; }
+.dd-do p, .dd-dont p { font: 0.88rem/1.5 'Source Sans 3', system-ui, sans-serif; margin: 0; color: #334155; }
+
+.ft-real-world {
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+  padding: 0.85rem 1.1rem; margin: 1rem 0;
+}
+.ft-real-world h4 { font: 600 0.85rem 'Source Sans 3', system-ui, sans-serif; color: #0f172a;
+  text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 0.4rem; }
+.ft-real-world p { font: 0.92rem/1.6 'Source Sans 3', system-ui, sans-serif; color: #334155; margin: 0; }
+
+.ft-checkpoint {
+  background: linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%);
+  border: 1px dashed #c026d3; border-radius: 6px;
+  padding: 0.85rem 1.1rem; margin: 1rem 0 0;
+}
+.ft-checkpoint h4 { font: 600 0.95rem 'Source Sans 3', system-ui, sans-serif; color: #86198f; margin: 0 0 0.35rem; }
+.ft-checkpoint p { font: 0.92rem/1.6 'Source Sans 3', system-ui, sans-serif; color: #581c87; margin: 0; }
+
+.ft-of-bits { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.ft-of-bits-label { font: 600 0.78rem 'Source Sans 3', system-ui, sans-serif; color: #475569;
+  text-transform: uppercase; letter-spacing: 0.05em; margin-right: 0.5rem; }
+.ft-of-bit {
+  background: #fef2f2; color: #991b1b; border: 1px solid #fecaca;
+  padding: 0.45rem 0.85rem; border-radius: 4px; cursor: pointer;
+  font: 600 0.85rem 'JetBrains Mono', monospace; transition: background .15s;
+}
+.ft-of-bit.is-on { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
+.ft-of-decode {
+  background: #0f172a; color: #67e8f9; padding: 0.65rem 1rem; border-radius: 4px;
+  font: 600 0.92rem 'JetBrains Mono', monospace; margin-top: 0.75rem;
+}
+.ft-of-decode span { color: #fbbf24; }
+.ft-of-decode.is-bad span { color: #f87171; }
+
+select#im-profile {
+  font: 0.92rem 'Source Sans 3', system-ui, sans-serif; color: #0f172a;
+  padding: 0.35rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff;
+}
+
+.ft-reset {
+  background: #475569; color: #f1f5f9; border: none; padding: 0.55rem 0.9rem; border-radius: 4px;
+  cursor: pointer; font: 600 0.8rem 'Source Sans 3', system-ui, sans-serif;
+}
+.ft-reset:hover { background: #1e293b; }
+
+.ft-apps-closing {
+  background: #fdfcf8; border: 1px solid #d9d4c7; border-radius: 8px;
+  padding: 1.25rem 1.5rem; margin: 1.5rem 0 0;
+}
+.ft-apps-closing h3 { font: 600 1.1rem 'Fraunces', Georgia, serif; color: #0f172a; margin: 0 0 0.5rem; }
+.ft-apps-closing p { font: 0.95rem/1.6 'Source Sans 3', system-ui, sans-serif; color: #334155; margin: 0; }
+.ft-apps-closing a { color: #0d4f5c; }
+
+@media (max-width: 700px) {
+  .ft-app-head { flex-direction: column; gap: 0.6rem; }
+  .ft-app-num { align-self: flex-start; }
+  .ft-do-dont { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 700px) {
+  .ft-title { font-size: 1.6rem; }
+  .ft-tab { padding: 0.55rem 0.75rem; font-size: 0.82rem; }
+  .ft-controls { gap: 0.75rem 1rem; }
+  .ft-row { grid-template-columns: auto 1fr 1fr; gap: 0.5rem; }
+}
+</style>
+
+</style>
+
+<div class="ft-embed">
+  <div class="ft-top-disclaimer" role="alert">
+    <strong>⚠ Learning tool:</strong> waveforms are drawn by a browser script and may be imperfect
+    (floating-point rounding, finite-term truncation/Gibbs, rendering quirks). Treat as a visual aid, not an
+    authoritative reference; cross-check against a textbook or established software (Wolfram, MATLAB, SciPy).
+  </div>
+
+  <div class="ft-formula-card">
+    <p class="ft-formula-label">Formula</p>
+    <div class="ft-formula">\[ y = \mathcal{F}^{-1}\big[\,\mathcal{F}(x)\cdot H(f)\,\big] \]</div>
+  </div>
+
+  <article class="ft-app">
+    <header class="ft-app-head">
+      <div>
+        <h3>ECG Noise Filtering</h3>
+        <p class="ft-app-hook">When a hospital ECG machine cleans the heartbeat trace before showing it to a cardiologist,
+          it does <em>this</em>: take the noisy signal into the frequency domain, delete the bins that don't belong to a heart,
+          take it back. Same maths drives every biosignal monitor on the planet.</p>
+      </div>
+    </header>
+
+    <div class="ft-formula-card">
+      <p class="ft-formula-label">The pipeline</p>
+      <div class="ft-formula">\[ x(t) \xrightarrow{\mathcal{F}} X(f) \;\;\xrightarrow{\text{mask } |f|>f_c \to 0}\;\; \tilde X(f) \;\xrightarrow{\mathcal{F}^{-1}}\; \tilde x(t) \]</div>
+      <p class="ft-citation">
+        Reference: <a href="https://en.wikipedia.org/wiki/Low-pass_filter" target="_blank" rel="noopener noreferrer">Wikipedia — Low-pass filter</a>;
+        <a href="https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/" target="_blank" rel="noopener noreferrer">MIT 6.003 Signals &amp; Systems</a>, Lecture 20.
+        Oppenheim, A. V., &amp; Schafer, R. W. (2010). <em>Discrete-Time Signal Processing</em>, 3rd ed., Ch. 7.
+      </p>
+    </div>
+
+    <div class="ft-try-this">
+      <h4>🧪 Try these experiments in order</h4>
+      <ol>
+        <li>Set <b>noise = 0</b> and <b>mains hum = 0</b>. You see a clean heartbeat pattern. Note the regular spikes — those are the QRS complexes.</li>
+        <li>Push <b>mains hum</b> to maximum. The 50 Hz interference swamps the trace — this is exactly what happens when an ECG cable runs too close to a power outlet.</li>
+        <li>Now drag <b>cutoff</b> from 80 Hz down to 30 Hz. Watch the 50 Hz spike in the spectrum vanish, and the heart trace return cleanly underneath.</li>
+        <li>Push <b>noise</b> to max too. Drag cutoff lower — at what frequency does the heartbeat start to lose its sharp R-spike?</li>
+      </ol>
+    </div>
+
+    <div class="ft-lab">
+      <div class="ft-controls">
+        <label>Noise amplitude <output id="o-ecg-n">0.20</output>
+          <input type="range" id="ecg-n" min="0" max="1" step="0.02" value="0.2">
+        </label>
+        <label>50 Hz mains hum <output id="o-ecg-h">0.30</output>
+          <input type="range" id="ecg-h" min="0" max="1" step="0.02" value="0.3">
+        </label>
+        <label>Low-pass cutoff (Hz) <output id="o-ecg-c">25</output>
+          <input type="range" id="ecg-c" min="1" max="80" step="1" value="25">
+        </label>
+        <button class="ft-reset" data-target="ecg">↺ reset</button>
+      </div>
+      <p class="ft-canvas-label">Noisy input signal (what the electrode actually sees)</p>
+      <canvas class="ft-canvas ft-canvas-app" id="canvas-ecg-in" width="900" height="200"></canvas>
+      <p class="ft-canvas-label">Magnitude spectrum (yellow = kept, red = filtered out)</p>
+      <canvas class="ft-canvas ft-canvas-app" id="canvas-ecg-spec" width="900" height="160"></canvas>
+      <p class="ft-canvas-label">Filtered output (what the cardiologist sees)</p>
+      <canvas class="ft-canvas ft-canvas-app" id="canvas-ecg-out" width="900" height="200"></canvas>
+    </div>
+
+    <div class="ft-watch-out">
+      <h4>⚠ Watch out for</h4>
+      <ul>
+        <li>Cutoff <b>too low</b> (below ~15 Hz) starts deleting the QRS spike itself — the R-wave goes round and smooth. In a real ICU this would hide arrhythmias.</li>
+        <li>The brick-wall mask used here is what textbooks call an "ideal" filter — in real hardware it would introduce ringing (Gibbs again). Real ECG machines use gentler Butterworth or Chebyshev filters.</li>
+      </ul>
+    </div>
+
+    <div class="ft-do-dont">
+      <div class="dd-do">
+        <h5>✅ Do</h5>
+        <p>Pick the cutoff <em>just above</em> the highest frequency that carries information you care about (≈40 Hz for ECG diagnostics).</p>
+      </div>
+      <div class="dd-dont">
+        <h5>❌ Don't</h5>
+        <p>Reuse the same cutoff for every signal. A 40 Hz lowpass is right for ECG, lethal for music (you'd lose every cymbal), wrong for EEG (cutoff ≈ 70 Hz).</p>
+      </div>
+    </div>
+
+    <div class="ft-real-world">
+      <h4>Where this matters in industry</h4>
+      <p>ICU and bedside ECG monitors, Holter recorders, fitness-tracker heart-rate algorithms, EEG/EMG biomedical work,
+        seismometers, audio noise gates, power-line interference removal on every sensor that touches a mains-powered system.</p>
+    </div>
+
+    <div class="ft-checkpoint">
+      <h4>🎯 Learning checkpoint</h4>
+      <p>If you set the cutoff <em>higher</em> than 50 Hz, does the mains hum disappear? Why or why not? (Try it.)</p>
+    </div>
+  </article>
+</div>
+
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<script>
+(function () {
+  'use strict';
+/* ---------- COMMON PLOTTER ---------- */
+  function setupCanvas(canvas) {
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = canvas.clientWidth || canvas.width;
+    const cssH = canvas.clientHeight || canvas.height;
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w: cssW, h: cssH };
+  }
+
+  function drawAxes(ctx, w, h, opts) {
+    opts = opts || {};
+    const yMax = opts.yMax || 1.6;
+    const xSpan = opts.xSpan || 2;        // seconds shown
+    const yMid = h / 2;
+    ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, w, h);
+
+    // grid
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.15)'; ctx.lineWidth = 1;
+    for (let i = 0; i <= 10; i++) {
+      const x = (i / 10) * w;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    for (let i = 0; i <= 8; i++) {
+      const y = (i / 8) * h;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    // zero axis
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.5)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(0, yMid); ctx.lineTo(w, yMid); ctx.stroke();
+
+    // labels
+    ctx.fillStyle = 'rgba(148, 163, 184, 0.8)';
+    ctx.font = '11px "JetBrains Mono", monospace';
+    ctx.fillText('+' + yMax.toFixed(1), 6, 14);
+    ctx.fillText('0', 6, yMid - 4);
+    ctx.fillText('-' + yMax.toFixed(1), 6, h - 6);
+    ctx.fillText('t = 0', 6, h - 18);
+    ctx.fillText('t = ' + xSpan + 's', w - 56, h - 6);
+  }
+
+  function plotWave(ctx, w, h, fn, opts) {
+    opts = opts || {};
+    const yMax = opts.yMax || 1.6;
+    const xSpan = opts.xSpan || 2;
+    const t0 = opts.t0 || 0;
+    const yMid = h / 2;
+    const scaleY = (h / 2) / yMax;
+    const samples = Math.min(w * 2, 1800);
+
+    ctx.strokeStyle = opts.color || '#22d3ee';
+    ctx.lineWidth = opts.width || 2.2;
+    ctx.beginPath();
+    for (let i = 0; i <= samples; i++) {
+      const tx = i / samples;
+      const t = t0 + tx * xSpan;
+      const y = fn(t);
+      const px = tx * w;
+      const py = yMid - y * scaleY;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+
+  function plotSpectrum(canvas, amps, opts) {
+    const { ctx, w, h } = setupCanvas(canvas);
+    opts = opts || {};
+    ctx.fillStyle = '#1e293b'; ctx.fillRect(0, 0, w, h);
+    // grid
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.15)';
+    for (let i = 1; i < 4; i++) {
+      const y = (i / 4) * h;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    const maxA = Math.max(...amps.map(Math.abs), 0.0001);
+    const padLeft = 36, padRight = 12, padBottom = 26, padTop = 16;
+    const plotW = w - padLeft - padRight, plotH = h - padTop - padBottom;
+    const n = amps.length;
+    const barW = Math.max(2, plotW / n - 2);
+    const step = plotW / n;
+    for (let k = 0; k < n; k++) {
+      const a = Math.abs(amps[k]);
+      const bh = (a / maxA) * plotH;
+      const x = padLeft + k * step + (step - barW) / 2;
+      const y = padTop + (plotH - bh);
+      const grad = ctx.createLinearGradient(0, y, 0, y + bh);
+      grad.addColorStop(0, '#fbbf24'); grad.addColorStop(1, '#b45309');
+      ctx.fillStyle = grad;
+      ctx.fillRect(x, y, barW, bh);
+    }
+    // axes labels
+    ctx.fillStyle = 'rgba(226, 232, 240, 0.85)';
+    ctx.font = '11px "JetBrains Mono", monospace';
+    ctx.fillText('|c_n|', 6, padTop + 4);
+    ctx.fillText('harmonic n →', padLeft, h - 8);
+    ctx.fillText('max=' + maxA.toFixed(2), w - 80, padTop + 4);
+  }
+
+  /* ---------- TIME-ANIMATION ENGINE ---------- */
+  const animations = {};   // key → { running, t0, startedAt, btn }
+  function bindPlay(key, redraw) {
+    const btn = document.querySelector('.ft-play[data-target="' + key + '"]');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const a = animations[key];
+      if (a && a.running) { a.running = false; btn.classList.remove('is-playing'); btn.textContent = '▶ animate t'; return; }
+      animations[key] = { running: true, t0: 0, startedAt: performance.now(), btn };
+      btn.classList.add('is-playing'); btn.textContent = '■ stop';
+      const loop = (now) => {
+        const st = animations[key]; if (!st || !st.running) return;
+        st.t0 = ((now - st.startedAt) / 1000) % 4;  // wrap at 4s
+        redraw(st.t0);
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+    });
+  }
+
+  
+/* ============================================================
+     SHARED DFT HELPERS for the Applications tab
+     Direct DFT — O(N²) but fast enough for N ≤ 512 in real time.
+     ============================================================ */
+  function dftReal(x) {
+    const N = x.length;
+    const re = new Float64Array(N), im = new Float64Array(N);
+    for (let k = 0; k < N; k++) {
+      let r = 0, i = 0;
+      for (let n = 0; n < N; n++) {
+        const ang = -2 * Math.PI * k * n / N;
+        r += x[n] * Math.cos(ang);
+        i += x[n] * Math.sin(ang);
+      }
+      re[k] = r; im[k] = i;
+    }
+    return { re, im };
+  }
+  function idftReal(re, im) {
+    const N = re.length;
+    const out = new Float64Array(N);
+    for (let n = 0; n < N; n++) {
+      let s = 0;
+      for (let k = 0; k < N; k++) {
+        const ang = 2 * Math.PI * k * n / N;
+        s += re[k] * Math.cos(ang) - im[k] * Math.sin(ang);
+      }
+      out[n] = s / N;
+    }
+    return out;
+  }
+  function dftMag(x) {
+    const { re, im } = dftReal(x);
+    const N = x.length, mag = new Float64Array(N);
+    for (let k = 0; k < N; k++) mag[k] = Math.sqrt(re[k]*re[k] + im[k]*im[k]);
+    return mag;
+  }
+  function plotArray(canvas, arr, opts) {
+    opts = opts || {};
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.fillStyle = opts.bg || '#0f172a'; ctx.fillRect(0, 0, w, h);
+    // grid
+    ctx.strokeStyle = 'rgba(148,163,184,0.12)';
+    for (let i = 1; i < 4; i++) {
+      ctx.beginPath(); ctx.moveTo(0, i*h/4); ctx.lineTo(w, i*h/4); ctx.stroke();
+    }
+    const yMid = h / 2;
+    ctx.strokeStyle = 'rgba(148,163,184,0.4)';
+    ctx.beginPath(); ctx.moveTo(0, yMid); ctx.lineTo(w, yMid); ctx.stroke();
+
+    const N = arr.length;
+    let yMax = opts.yMax;
+    if (!yMax) { yMax = 1; for (let i = 0; i < N; i++) yMax = Math.max(yMax, Math.abs(arr[i])); yMax *= 1.1; }
+    const scaleY = (h/2) / yMax;
+    ctx.strokeStyle = opts.color || '#22d3ee';
+    ctx.lineWidth = opts.width || 2;
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const px = (i / (N - 1)) * w;
+      const py = yMid - arr[i] * scaleY;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    if (opts.label) {
+      ctx.fillStyle = opts.color || '#22d3ee';
+      ctx.font = '12px "Source Sans 3", system-ui, sans-serif';
+      ctx.fillText(opts.label, w - 220, 18);
+    }
+  }
+
+  
+/* ============================================================
+     APP 01: ECG NOISE FILTERING
+     ============================================================ */
+  (function () {
+    const N = 256, fs = 256;                 // 1 second of data
+    const cIn = document.getElementById('canvas-ecg-in');
+    const cSp = document.getElementById('canvas-ecg-spec');
+    const cOut = document.getElementById('canvas-ecg-out');
+    const noiseIn = document.getElementById('ecg-n'), noiseOut = document.getElementById('o-ecg-n');
+    const humIn = document.getElementById('ecg-h'), humOut = document.getElementById('o-ecg-h');
+    const cutIn = document.getElementById('ecg-c'), cutOut = document.getElementById('o-ecg-c');
+    const resetBtn = document.querySelector('.ft-reset[data-target="ecg"]');
+
+    // pre-generate a fixed noise seed so changing cutoff doesn't reshuffle noise
+    const seedNoise = new Float64Array(N);
+    for (let i = 0; i < N; i++) seedNoise[i] = (Math.random() - 0.5) * 2;
+
+    // ECG-like clean signal (1 Hz heart, P-QRS-T morphology via Gaussians)
+    function ecgClean(t) {
+      const phase = ((t * 1) % 1 + 1) % 1;
+      const q = -0.10 * Math.exp(-Math.pow((phase - 0.20) / 0.012, 2));
+      const r =  1.00 * Math.exp(-Math.pow((phase - 0.23) / 0.010, 2));
+      const s = -0.25 * Math.exp(-Math.pow((phase - 0.26) / 0.014, 2));
+      const Tw = 0.30 * Math.exp(-Math.pow((phase - 0.42) / 0.045, 2));
+      const Pw = 0.12 * Math.exp(-Math.pow((phase - 0.07) / 0.025, 2));
+      return q + r + s + Tw + Pw;
+    }
+
+    function draw() {
+      const noiseAmp = parseFloat(noiseIn.value); noiseOut.value = noiseAmp.toFixed(2);
+      const humAmp   = parseFloat(humIn.value);   humOut.value = humAmp.toFixed(2);
+      const cutHz    = parseInt(cutIn.value);     cutOut.value = cutHz;
+
+      // build noisy signal
+      const x = new Float64Array(N);
+      for (let i = 0; i < N; i++) {
+        const t = i / fs;
+        x[i] = ecgClean(t) + humAmp * Math.sin(2 * Math.PI * 50 * t) + noiseAmp * seedNoise[i];
+      }
+
+      // DFT, brick-wall low-pass, IDFT
+      const { re, im } = dftReal(x);
+      const cutBin = Math.round(cutHz);          // 1 bin = 1 Hz for N=fs=256
+      const reF = new Float64Array(N), imF = new Float64Array(N);
+      const kept = new Uint8Array(N);
+      for (let k = 0; k < N; k++) {
+        const kk = k <= N/2 ? k : N - k;          // distance from DC
+        if (kk <= cutBin) { reF[k] = re[k]; imF[k] = im[k]; kept[k] = 1; }
+      }
+      const y = idftReal(reF, imF);
+
+      // plots
+      plotArray(cIn, x, { color: '#fbbf24', yMax: 2.5, label: 'noisy input' });
+      plotArray(cOut, y, { color: '#22d3ee', yMax: 2.5, label: 'filtered output' });
+
+      // spectrum: |X[k]| for k=0..N/2, colour by kept/cut
+      const { ctx, w, h } = setupCanvas(cSp);
+      ctx.fillStyle = '#1e293b'; ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(148,163,184,0.12)';
+      for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(0, i*h/4); ctx.lineTo(w, i*h/4); ctx.stroke(); }
+      const half = N/2;
+      let mMax = 0;
+      const mag = new Float64Array(half);
+      for (let k = 0; k < half; k++) { mag[k] = Math.sqrt(re[k]*re[k] + im[k]*im[k]); if (mag[k] > mMax) mMax = mag[k]; }
+      const padL = 30, padB = 22, padT = 10;
+      const plotW = w - padL - 10, plotH = h - padT - padB;
+      const barW = Math.max(1.5, plotW / half - 1);
+      for (let k = 0; k < half; k++) {
+        const bh = (mag[k] / mMax) * plotH;
+        const x0 = padL + k * (plotW / half);
+        ctx.fillStyle = k <= cutBin ? '#fbbf24' : '#ef4444';
+        ctx.fillRect(x0, padT + (plotH - bh), barW, bh);
+      }
+      // cutoff line
+      const xc = padL + cutBin * (plotW / half);
+      ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 1.5; ctx.setLineDash([4,3]);
+      ctx.beginPath(); ctx.moveTo(xc, padT); ctx.lineTo(xc, padT + plotH); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(226,232,240,0.85)';
+      ctx.font = '11px "JetBrains Mono", monospace';
+      ctx.fillText('0 Hz', padL, h - 6);
+      ctx.fillText((fs/2) + ' Hz', w - 50, h - 6);
+      ctx.fillText('cutoff = ' + cutHz + ' Hz', xc + 6, padT + 12);
+    }
+
+    [noiseIn, humIn, cutIn].forEach(el => el.addEventListener('input', draw));
+    resetBtn.addEventListener('click', () => {
+      noiseIn.value = 0.2; humIn.value = 0.3; cutIn.value = 25; draw();
+    });
+    draw();
+  })();
+  // initial sizing nudge
+  window.addEventListener('resize', function () {
+    document.querySelectorAll('input[type=range]').forEach(function (i) { i.dispatchEvent(new Event('input')); });
+  });
+})();
+</script>

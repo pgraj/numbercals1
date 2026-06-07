@@ -1,0 +1,9 @@
+from core.faqs import register_faqs
+
+register_faqs("fourier-vowel-formants", [
+    {"q": "What is a formant?", "a": "A formant is a resonant frequency of your vocal tract — a peak in the spectrum where your mouth and throat amplify sound. The first two or three formants are what your brain uses to tell 'ee' from 'ah' from 'oo'. Move the F1 and F2 sliders here and watch a vowel morph into another."},
+    {"q": "How can a phone or computer recognise vowels?", "a": "By finding the formant peaks in the spectrum — essentially doing the Fourier analysis this page visualises. Speech recognition, voice assistants, and the 'autotune' effect in music all rely on tracking these resonances. Your vocal tract is, mathematically, a filter shaping a buzzing source."},
+    {"q": "Why do men, women and children sound different saying the same vowel?", "a": "Two reasons. The pitch (f0, the buzz of the vocal folds) differs — lower for larger larynxes. And formant frequencies scale with vocal-tract length — a shorter tract pushes them higher. The vowel identity stays the same because the pattern of formants stays similar even as everything shifts."},
+    {"q": "What is the 'source-filter' model the formula mentions?", "a": "It splits speech into two parts: a source (the buzzing vocal folds, rich in harmonics) and a filter (the mouth and throat, which boost some frequencies and cut others). The vowel you hear is the source shaped by the filter — multiplication in the frequency domain, which is what the envelope on this page shows."},
+    {"q": "Is this how singers shape their voice?", "a": "Yes — trained singers consciously tune their formants. Opera singers use the 'singer's formant' around 3 kHz to project over an orchestra without amplification, and overtone singers move formants so precisely they can make individual harmonics audible as separate notes."},
+])

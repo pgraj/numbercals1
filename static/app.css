@@ -362,15 +362,15 @@ button.eq:hover{filter:brightness(1.08)}
 .side-sub{margin:0 0 1px}
 .side-sub-summary{
   display:flex;align-items:center;gap:6px;cursor:pointer;list-style:none;
-  font-family:var(--mono);font-size:12px;letter-spacing:.03em;
-  color:var(--ink-soft);padding:6px 8px;border-radius:4px}
+  font-family:var(--sans);font-size:14px;font-weight:600;
+  color:var(--ink);padding:7px 8px;border-radius:4px}
 .side-sub-summary::-webkit-details-marker{display:none}  /* hide native triangle */
 .side-sub-summary:hover{color:var(--accent);background:var(--paper-2)}
 .side-sub-caret{flex:0 0 auto;transition:transform .15s ease;font-size:11px}
 .side-sub[open] > .side-sub-summary .side-sub-caret{transform:rotate(90deg)}
 .side-sub[open] > .side-sub-summary{color:var(--accent)}
 .side-sub-name{flex:1;min-width:0;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase}
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .side-sub-count{flex:0 0 auto;font-size:11px;color:var(--ink-soft)}
 
 /* the calculator links themselves */

@@ -1,0 +1,37 @@
+"""Rectangle — geometry > 2D Geometry. Area, perimeter and diagonal from length and width."""
+from core.registry import register
+import math
+
+@register(
+    slug="rectangle-area",
+    name="Rectangle Area Calculator",
+    section="maths",
+    sub="2D Shapes",
+    topic="Geometry",
+    tags=["rectangle", "area", "perimeter", "diagonal", "geometry"],
+    formula="area = length\u00d7width ; perimeter = 2(length+width) ; diagonal = \u221a(l\u00b2+w\u00b2)",
+    summary="Find the area, perimeter and diagonal of a rectangle from its length and width.",
+    viz_template="viz/rectangle-area.html",
+)
+def compute(length: float = 8, width: float = 5):
+    try:
+        l = float(length); w = float(width)
+    except (TypeError, ValueError):
+        return {"error": "Enter numbers for length and width."}
+    if l <= 0 or w <= 0:
+        return {"error": "Length and width must be greater than zero."}
+    area = l * w
+    perim = 2 * (l + w)
+    diag = math.sqrt(l * l + w * w)
+    steps = [
+        {"label": "Area", "math": r"\(A = l \times w = " + ("%g" % l) + r" \times " + ("%g" % w) + r" = " + ("%g" % area) + r"\)", "note": "Length times width."},
+        {"label": "Perimeter", "math": r"\(P = 2(l + w) = 2(" + ("%g" % l) + r" + " + ("%g" % w) + r") = " + ("%g" % perim) + r"\)", "note": "Twice the sum of the two sides."},
+        {"label": "Diagonal", "math": r"\(d = \sqrt{l^2 + w^2} = " + ("%.4g" % diag) + r"\)", "note": "Pythagoras across the rectangle."},
+    ]
+    return {
+        "result": "Area " + ("%g" % area) + ", perimeter " + ("%g" % perim) + ", diagonal " + ("%.4g" % diag),
+        "area": round(area, 6), "length": l, "width": w, "perimeter": round(perim, 6), "diagonal": round(diag, 6), "steps": steps,
+    }
+
+from core.faqs import load_sibling_faq
+load_sibling_faq(__file__)

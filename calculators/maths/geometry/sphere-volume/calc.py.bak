@@ -1,0 +1,48 @@
+"""Sphere — geometry > 3D Geometry. Volume and surface area; solve from radius, diameter, volume or SA."""
+from core.registry import register
+import math
+
+@register(
+    slug="sphere-volume",
+    name="Sphere Volume Calculator",
+    section="maths",
+    sub="Geometry",
+    tags=["sphere", "volume", "surface area", "radius", "geometry"],
+    formula="volume = 4/3\u00b7\u03c0r\u00b3 ; surface area = 4\u03c0r\u00b2",
+    summary="Find a sphere's volume and surface area. Enter the radius, diameter, volume or surface area and the rest follow.",
+    viz_template="viz/sphere-volume.html",
+)
+def compute(known: str = "radius", value: float = 5):
+    k = str(known or "radius").strip().lower()
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return {"error": "Enter a number."}
+    if v <= 0:
+        return {"error": "Value must be greater than zero."}
+    if k == "radius":
+        r = v
+    elif k == "diameter":
+        r = v / 2
+    elif k == "volume":
+        r = (v * 3 / (4 * math.pi)) ** (1.0 / 3.0)
+    elif k in ("surface_area", "surface area", "sa"):
+        r = math.sqrt(v / (4 * math.pi))
+    else:
+        return {"error": "Choose radius, diameter, volume or surface_area."}
+    vol = 4.0 / 3.0 * math.pi * r ** 3
+    sa = 4 * math.pi * r * r
+    diam = 2 * r
+    steps = [
+        {"label": "Radius", "math": r"\(r = " + ("%.4g" % r) + r"\)", "note": "Found from your " + k.replace("_", " ") + "."},
+        {"label": "Volume", "math": r"\(V = \tfrac{4}{3}\pi r^3 = " + ("%.4g" % vol) + r"\)", "note": "Grows with the cube of the radius."},
+        {"label": "Surface area", "math": r"\(A = 4\pi r^2 = " + ("%.4g" % sa) + r"\)", "note": "Exactly four times the area of a great circle."},
+    ]
+    return {
+        "result": "Radius " + ("%.4g" % r) + ", volume " + ("%.4g" % vol) + ", surface area " + ("%.4g" % sa) + ", diameter " + ("%.4g" % diam),
+        "radius": round(r, 6), "volume": round(vol, 6), "surface_area": round(sa, 6), "diameter": round(diam, 6),
+        "steps": steps,
+    }
+
+from core.faqs import load_sibling_faq
+load_sibling_faq(__file__)

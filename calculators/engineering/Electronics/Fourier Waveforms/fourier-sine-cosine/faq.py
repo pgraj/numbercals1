@@ -1,0 +1,9 @@
+from core.faqs import register_faqs
+
+register_faqs("fourier-sine-cosine", [
+    {"q": "Why do sine and cosine matter so much in engineering?", "a": "Almost every periodic signal in the physical world — AC mains, sound, light, radio — can be written as a sum of sines and cosines. They are the 'atoms' of vibration: a sine wave keeps its shape when you differentiate it, pass it through a linear circuit, or send it down a wire, which is exactly why engineers describe everything in terms of them."},
+    {"q": "What is the difference between amplitude, frequency and phase?", "a": "Amplitude (A) is how tall the wave is — loudness for sound, voltage for a signal. Frequency (f) is how many cycles happen per second, measured in hertz — pitch for sound, colour for light. Phase (φ) shifts the whole wave left or right in time. Drag each slider here and you can see exactly which knob does what."},
+    {"q": "Why is a cosine just a shifted sine?", "a": "cos(x) = sin(x + π/2). They are the same wave a quarter-cycle apart. That 90° relationship is why engineers pair them: any sinusoid of a given frequency can be made from a little sine plus a little cosine, which is the whole basis of the Fourier series."},
+    {"q": "Where would I meet this in real life?", "a": "Tuning a guitar string (a near-pure sine at its fundamental), the 50/60 Hz hum from mains power, the carrier wave of an FM radio station, and the swing of a pendulum all behave like the sinusoids on this page. Audio synthesisers literally start from a sine oscillator and build everything else on top."},
+    {"q": "What does adding phase actually change physically?", "a": "Phase decides where in its cycle a wave starts. Two identical speakers slightly out of phase can cancel each other (that is how noise-cancelling headphones work) or reinforce each other. In power systems, the phase difference between voltage and current determines how much usable power you actually get."},
+])

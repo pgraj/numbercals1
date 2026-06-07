@@ -1,0 +1,9 @@
+from core.faqs import register_faqs
+
+register_faqs("fourier-diffraction", [
+    {"q": "Is it true the diffraction pattern is literally a Fourier transform?", "a": "Yes — remarkably, the far-field light pattern through an aperture is the squared magnitude of the aperture's Fourier transform. Nature computes the transform for you, instantly, in light. Narrow the slit here and watch the pattern spread, exactly as the maths predicts."},
+    {"q": "How did this reveal the structure of DNA?", "a": "Rosalind Franklin's famous 'Photo 51' was an X-ray diffraction image of DNA. She never saw the double helix directly — she saw its Fourier transform as a pattern of spots, and the characteristic X-shape in that pattern is the fingerprint of a helix. Crick and Watson read the structure back out of it."},
+    {"q": "Why do CDs and DVDs make rainbow patterns?", "a": "Their surfaces are covered in regularly spaced microscopic tracks — a diffraction grating. White light hitting that grating diffracts each colour to a slightly different angle, spreading the spectrum into a rainbow. The spacing of the tracks sets the angles, just like slit spacing does here."},
+    {"q": "What is the warning about aliasing in the tool?", "a": "If you pack too many slits too far apart, the pattern exceeds what the simulation's grid can represent and you get false, wrapped-around features — aliasing. It is the same effect that makes wagon wheels appear to spin backwards in films, and it is a real limit in any sampled or pixelated system."},
+    {"q": "Where is diffraction used in technology?", "a": "Diffraction gratings split light in spectrometers that identify chemicals and distant stars; the same physics sets the resolution limit of microscopes, telescopes and camera lenses, and underpins X-ray crystallography — the tool that has solved thousands of protein and drug structures."},
+])

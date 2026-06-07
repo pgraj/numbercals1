@@ -1,0 +1,9 @@
+from core.faqs import register_faqs
+
+register_faqs("fourier-ofdm", [
+    {"q": "What does OFDM have to do with my phone?", "a": "Everything — 4G, 5G, Wi-Fi and digital TV all use OFDM. Instead of sending data on one fast carrier, they split it across many slower sub-carriers packed tightly together. Fourier maths is what lets those carriers overlap without interfering, squeezing far more data into the same airwaves."},
+    {"q": "What does 'orthogonal' actually mean here?", "a": "It means the sub-carriers are spaced so precisely that, when you correlate the received signal with each one, the others contribute exactly zero. They overlap in frequency yet do not interfere — a Fourier property. Nudge the spacing slider off the ideal value and watch the decoded bits start to corrupt."},
+    {"q": "Why pack the carriers so close instead of spacing them out?", "a": "Spectrum is scarce and expensive — phone companies pay billions for it. Orthogonality lets carriers sit shoulder to shoulder with no guard gaps, so you fit the maximum data into the minimum bandwidth. It is one of the key tricks behind modern wireless speed."},
+    {"q": "What is crosstalk and why does the tool warn about it?", "a": "Crosstalk is when one sub-carrier leaks into another's decoding, scrambling the data. It happens when orthogonality breaks — wrong spacing, timing errors, or Doppler shift from a moving phone. The readout here flips to a warning so you can see the exact moment the channel becomes unreliable."},
+    {"q": "How does the receiver pull the bits back out?", "a": "It correlates the incoming sum with each carrier shape — essentially a Fourier analysis. Because the carriers are orthogonal, each correlation recovers just that carrier's bit and ignores the rest. Real chips do this with a Fast Fourier Transform thousands of times a second."},
+])

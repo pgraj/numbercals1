@@ -1,0 +1,668 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+
+  <div class="viz-inputs" style="display:flex;align-items:flex-start;gap:22px;flex-wrap:wrap;margin-bottom:6px">
+    <label id="cs-weekly_rent-l" style="display:block">
+      <span style="display:block;white-space:nowrap;font-size:.86rem;opacity:.85">Weekly rent</span>
+      <span class="nc-field" style="display:block"><input type="number" id="cs-weekly_rent" data-k="weekly_rent" value="550" step="any" style="width:130px"></span>
+    </label>
+    <label id="cs-annual_mortgage_payments-l" style="display:block">
+      <span style="display:block;white-space:nowrap;font-size:.86rem;opacity:.85">Annual mortgage payments</span>
+      <span class="nc-field" style="display:block"><input type="number" id="cs-annual_mortgage_payments" data-k="annual_mortgage_payments" value="22000" step="any" style="width:130px"></span>
+    </label>
+    <label id="cs-annual_costs-l" style="display:block">
+      <span style="display:block;white-space:nowrap;font-size:.86rem;opacity:.85">Annual costs</span>
+      <span class="nc-field" style="display:block"><input type="number" id="cs-annual_costs" data-k="annual_costs" value="8000" step="any" style="width:130px"></span>
+    </label>
+    <label id="cs-vacancy_rate_percent-l" style="display:block">
+      <span style="display:block;white-space:nowrap;font-size:.86rem;opacity:.85">Vacancy rate (%)</span>
+      <span class="nc-field" style="display:block"><input type="number" id="cs-vacancy_rate_percent" data-k="vacancy_rate_percent" value="4" step="any" style="width:130px"></span>
+    </label>
+  </div>
+
+  <div class="nc-learn2" id="cs-learn2" role="group" aria-label="Answer detail"
+       style="display:inline-flex;border:1px solid var(--rule,#ddd);border-radius:8px;overflow:hidden;margin:10px 0 8px">
+    <button type="button" data-mode="direct" class="active" aria-pressed="true" style="cursor:pointer;border:0;padding:5px 14px;font-size:.86rem;background:transparent">Direct answer</button>
+    <button type="button" data-mode="steps" aria-pressed="false" style="cursor:pointer;border:0;padding:5px 14px;font-size:.86rem;background:transparent">Step-by-step working</button>
+  </div>
+
+  <canvas id="cs-canvas" width="640" height="300"
+          style="display:block;width:100%;height:auto;max-width:560px;margin:4px auto 0"></canvas>
+  <p class="viz-caption" id="cs-cap" style="font-size:.88rem;margin-top:.5rem;opacity:.85;text-align:center"></p>
+
+  <div class="viz-out" id="cs-out" style="margin-top:10px"></div>
+  <div class="viz-steps" id="cs-steps" style="margin-top:10px;display:none"></div>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:14px"></div>
+  <p class="viz-disclaimer" id="cs-disc" style="font-size:.82rem;margin-top:.7rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<script>
+/* per-calc diagram library (shared, idempotent) */
+if(!window.NCDiagrams){
+/* NumberCals per-calc diagram library.
+   Each entry: function(ctx, W, H, d, sk) -> draws a shape-appropriate picture using
+   compute-result fields in `d` and theme colours in `sk`. Pure canvas 2D. */
+(function(){
+  function C(sk,k,f){ return (sk&&sk[k])||f; }
+  function clear(ctx,W,H){ ctx.clearRect(0,0,W,H); }
+  function txt(ctx,s,x,y,col,font,align){ ctx.fillStyle=col; ctx.font=font; ctx.textAlign=align||"center"; ctx.fillText(s,x,y); }
+  function nf(x){ if(x==null||isNaN(x))return ""; if(Math.abs(x)>=1e6||(x!==0&&Math.abs(x)<1e-3))return Number(x).toPrecision(4);
+    if(Math.abs(x-Math.round(x))<1e-9)return String(Math.round(x)); return (Math.round(x*1000)/1000).toString(); }
+
+  // ---- shared helpers ----
+  function ink(sk){return C(sk,"ink","#2b2b2b");}
+  function acc(sk){return C(sk,"accent","#b4532a");}
+  function soft(sk){return C(sk,"inkSoft","#8a8a8a");}
+  function fill(sk){return C(sk,"accent","#b4532a");}
+  function paper2(sk){return C(sk,"paper2","#f1ece2");}
+  function mono(sk){return C(sk,"mono","monospace");}
+  function sans(sk){return C(sk,"sans","sans-serif");}
+
+  function dimLabel(ctx,x,y,s,sk){ txt(ctx,s,x,y,soft(sk),"12px "+mono(sk)); }
+
+  const D={};
+
+  /* ===================== 2D GEOMETRY ===================== */
+  D["square-area"]=function(ctx,W,H,d,sk){
+    const s=d.side||1, side=Math.min(W,H)*0.5, cx=W/2, cy=H/2;
+    const x=cx-side/2, y=cy-side/2;
+    ctx.fillStyle=paper2(sk); ctx.fillRect(x,y,side,side);
+    ctx.strokeStyle=acc(sk); ctx.lineWidth=2; ctx.strokeRect(x,y,side,side);
+    ctx.strokeStyle=soft(sk); ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(x,y+side); ctx.lineTo(x+side,y); ctx.stroke(); ctx.setLineDash([]);
+    dimLabel(ctx,cx,y+side+18,"side = "+nf(s),sk);
+    dimLabel(ctx,x+side*0.72,y+side*0.36,"d="+nf(d.diagonal),sk);
+    txt(ctx,"Area "+nf(d.area),cx,y-10,ink(sk),"bold 14px "+sans(sk));
+  };
+  D["rectangle-area"]=function(ctx,W,H,d,sk){
+    const l=d.length||(d.area? Math.sqrt(d.area):1), w=d.width||1;
+    const maxW=W*0.6, maxH=H*0.5, ar=(l&&w)?l/w:1.6;
+    let bw=maxW, bh=bw/ar; if(bh>maxH){bh=maxH;bw=bh*ar;}
+    const x=W/2-bw/2, y=H/2-bh/2;
+    ctx.fillStyle=paper2(sk); ctx.fillRect(x,y,bw,bh);
+    ctx.strokeStyle=acc(sk); ctx.lineWidth=2; ctx.strokeRect(x,y,bw,bh);
+    ctx.strokeStyle=soft(sk); ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(x,y+bh); ctx.lineTo(x+bw,y); ctx.stroke(); ctx.setLineDash([]);
+    dimLabel(ctx,x+bw/2,y+bh+18,"length = "+nf(d.length),sk);
+    ctx.save(); ctx.translate(x-12,y+bh/2); ctx.rotate(-Math.PI/2); dimLabel(ctx,0,0,"width = "+nf(d.width),sk); ctx.restore();
+    txt(ctx,"Area "+nf(d.area),x+bw/2,y-10,ink(sk),"bold 14px "+sans(sk));
+  };
+  D["triangle-area"]=function(ctx,W,H,d,sk){
+    const cx=W/2, baseY=H*0.72, bw=Math.min(W*0.55,260), apexX=cx-bw*0.12, apexY=H*0.26;
+    const x0=cx-bw/2, x1=cx+bw/2;
+    ctx.beginPath(); ctx.moveTo(x0,baseY); ctx.lineTo(x1,baseY); ctx.lineTo(apexX,apexY); ctx.closePath();
+    ctx.fillStyle=paper2(sk); ctx.fill(); ctx.strokeStyle=acc(sk); ctx.lineWidth=2; ctx.stroke();
+    // height line
+    ctx.strokeStyle=soft(sk); ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(apexX,apexY); ctx.lineTo(apexX,baseY); ctx.stroke(); ctx.setLineDash([]);
+    dimLabel(ctx,cx,baseY+18,(d.method==="heron"?"3 sides (Heron)":"base"),sk);
+    txt(ctx,"Area "+nf(d.area),cx,apexY-8,ink(sk),"bold 14px "+sans(sk));
+  };
+  D["circle-area"]=function(ctx,W,H,d,sk){
+    const cx=W/2, cy=H/2, R=Math.min(W,H)*0.32;
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI); ctx.fillStyle=paper2(sk); ctx.fill();
+    ctx.strokeStyle=acc(sk); ctx.lineWidth=2; ctx.stroke();
+    ctx.strokeStyle=soft(sk); ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+R,cy); ctx.stroke();
+    ctx.fillStyle=ink(sk); ctx.beginPath(); ctx.arc(cx,cy,2.5,0,2*Math.PI); ctx.fill();
+    dimLabel(ctx,cx+R/2,cy-6,"r = "+nf(d.radius),sk);
+    txt(ctx,"Area "+nf(d.area),cx,cy-R-10,ink(sk),"bold 14px "+sans(sk));
+    txt(ctx,"C = "+nf(d.circumference),cx,cy+R+20,soft(sk),"12px "+mono(sk));
+  };
+  D["parallelogram-area"]=function(ctx,W,H,d,sk){
+    const cx=W/2, baseY=H*0.66, bw=Math.min(W*0.5,230), sk_=bw*0.28, bh=H*0.34;
+    const x0=cx-bw/2, x1=cx+bw/2;
+    ctx.beginPath(); ctx.moveTo(x0,baseY); ctx.lineTo(x1,baseY); ctx.lineTo(x1+sk_,baseY-bh); ctx.lineTo(x0+sk_,baseY-bh); ctx.closePath();
+    ctx.fillStyle=paper2(sk); ctx.fill(); ctx.strokeStyle=acc(sk); ctx.lineWidth=2; ctx.stroke();
+    ctx.strokeStyle=soft(sk); ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(x0+sk_,baseY-bh); ctx.lineTo(x0+sk_,baseY); ctx.stroke(); ctx.setLineDash([]);
+    dimLabel(ctx,cx,baseY+18,"base",sk); dimLabel(ctx,x0+sk_-16,baseY-bh/2,"h",sk);
+    txt(ctx,"Area "+nf(d.area),cx,baseY-bh-10,ink(sk),"bold 14px "+sans(sk));
+  };
+  D["trapezoid-area"]=function(ctx,W,H,d,sk){
+    const cx=W/2, baseY=H*0.66, bw=Math.min(W*0.6,260), tw=bw*0.5, bh=H*0.34;
+    ctx.beginPath(); ctx.moveTo(cx-bw/2,baseY); ctx.lineTo(cx+bw/2,baseY); ctx.lineTo(cx+tw/2,baseY-bh); ctx.lineTo(cx-tw/2,baseY-bh); ctx.closePath();
+    ctx.fillStyle=paper2(sk); ctx.fill(); ctx.strokeStyle=acc(sk); ctx.lineWidth=2; ctx.stroke();
+    ctx.strokeStyle=soft(sk); ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(cx-tw/2,baseY-bh); ctx.lineTo(cx-tw/2,baseY); ctx.stroke(); ctx.setLineDash([]);
+    dimLabel(ctx,cx,baseY+18,"a (bottom)",sk); dimLabel(ctx,cx,baseY-bh-8,"b (top)",sk);
+    txt(ctx,"Area "+nf(d.area),cx+bw/2-20,baseY-bh-22,ink(sk),"bold 13px "+sans(sk));
+  };
+  D["rhombus-area"]=function(ctx,W,H,d,sk){
+    const cx=W/2, cy=H/2, hw=Math.min(W*0.3,150), hh=Math.min(H*0.34,110);
+    ctx.beginPath(); ctx.moveTo(cx,cy-hh); ctx.lineTo(cx+hw,cy); ctx.lineTo(cx,cy+hh); ctx.lineTo(cx-hw,cy); ctx.closePath();
+    ctx.fillStyle=paper2(sk); ctx.fill(); ctx.strokeStyle=acc(sk); ctx.lineWidth=2; ctx.stroke();
+    ctx.strokeStyle=soft(sk); ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(cx-hw,cy); ctx.lineTo(cx+hw,cy); ctx.moveTo(cx,cy-hh); ctx.lineTo(cx,cy+hh); ctx.stroke(); ctx.setLineDash([]);
+    dimLabel(ctx,cx+hw/2,cy-6,"d\u2082",sk); dimLabel(ctx,cx+10,cy-hh/2,"d\u2081",sk);
+    txt(ctx,"Area "+nf(d.area),cx,cy-hh-10,ink(sk),"bold 14px "+sans(sk));
+  };
+  D["ellipse-area"]=function(ctx,W,H,d,sk){
+    const cx=W/2, cy=H/2, ra=Math.min(W*0.34,170), rb=Math.min(H*0.3,95);
+    ctx.beginPath(); ctx.ellipse(cx,cy,ra,rb,0,0,2*Math.PI); ctx.fillStyle=paper2(sk); ctx.fill();
+    ctx.strokeStyle=acc(sk); ctx.lineWidth=2; ctx.stroke();
+    ctx.strokeStyle=soft(sk); ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+ra,cy); ctx.moveTo(cx,cy); ctx.lineTo(cx,cy-rb); ctx.stroke();
+    dimLabel(ctx,cx+ra/2,cy-6,"a",sk); dimLabel(ctx,cx+10,cy-rb/2,"b",sk);
+    txt(ctx,"Area "+nf(d.area),cx,cy-rb-10,ink(sk),"bold 14px "+sans(sk));
+  };
+  D["regular-polygon"]=function(ctx,W,H,d,sk){
+    const n=Math.max(3,Math.round(d.sides||6)), cx=W/2, cy=H/2+6, R=Math.min(W,H)*0.32;
+    ctx.beginPath();
+    for(let i=0;i<n;i++){ const a=-Math.PI/2 + i*2*Math.PI/n; const px=cx+R*Math.cos(a), py=cy+R*Math.sin(a); i?ctx.lineTo(px,py):ctx.moveTo(px,py); }
+    ctx.closePath(); ctx.fillStyle=paper2(sk); ctx.fill(); ctx.strokeStyle=acc(sk); ctx.lineWidth=2; ctx.stroke();
+    txt(ctx,n+"-gon",cx,cy+4,soft(sk),"12px "+mono(sk));
+    txt(ctx,"Area "+nf(d.area),cx,cy-R-10,ink(sk),"bold 14px "+sans(sk));
+    txt(ctx,"interior "+nf(d.interior_angle)+"\u00b0",cx,cy+R+20,soft(sk),"12px "+mono(sk));
+  };
+
+  /* ===================== 3D GEOMETRY ===================== */
+  function iso(ctx,pts,faceCol,edgeCol){ ctx.beginPath(); pts.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath(); ctx.fillStyle=faceCol; ctx.fill(); ctx.strokeStyle=edgeCol; ctx.lineWidth=1.6; ctx.stroke(); }
+  function shade(sk,amt){ // lighten/darken accent by mixing toward paper/ink
+    return amt>0 ? C(sk,"paper2","#eee") : C(sk,"accent","#b4532a"); }
+
+  D["cube-volume"]=function(ctx,W,H,d,sk){
+    const cx=W/2, cy=H/2+10, s=Math.min(W,H)*0.34, dx=s*0.42, dy=-s*0.32;
+    const a=acc(sk), p2=paper2(sk), p3=C(sk,"paper3","#e6ded0");
+    const F=[[cx-s/2,cy-s/2],[cx+s/2,cy-s/2],[cx+s/2,cy+s/2],[cx-s/2,cy+s/2]];
+    const top=[F[0],F[1],[F[1][0]+dx,F[1][1]+dy],[F[0][0]+dx,F[0][1]+dy]];
+    const side=[F[1],F[2],[F[2][0]+dx,F[2][1]+dy],[F[1][0]+dx,F[1][1]+dy]];
+    iso(ctx,top,p3,a); iso(ctx,side,p2,a); iso(ctx,F,p2,a);
+    txt(ctx,"Vol "+nf(d.volume),cx,cy+s/2+24,ink(sk),"bold 14px "+sans(sk));
+    dimLabel(ctx,cx,cy+s/2+6,"edge "+nf(d.edge||(d.volume?Math.cbrt(d.volume):"")),sk);
+  };
+  D["cuboid-volume"]=function(ctx,W,H,d,sk){
+    const cx=W/2, cy=H/2+10; const a=acc(sk), p2=paper2(sk), p3=C(sk,"paper3","#e6ded0");
+    const bw=Math.min(W*0.4,180), bh=Math.min(H*0.34,110), dx=bw*0.34, dy=-bh*0.4;
+    const F=[[cx-bw/2,cy-bh/2],[cx+bw/2,cy-bh/2],[cx+bw/2,cy+bh/2],[cx-bw/2,cy+bh/2]];
+    const top=[F[0],F[1],[F[1][0]+dx,F[1][1]+dy],[F[0][0]+dx,F[0][1]+dy]];
+    const side=[F[1],F[2],[F[2][0]+dx,F[2][1]+dy],[F[1][0]+dx,F[1][1]+dy]];
+    iso(ctx,top,p3,a); iso(ctx,side,p2,a); iso(ctx,F,p2,a);
+    dimLabel(ctx,cx,cy+bh/2+18,"l\u00d7w\u00d7h",sk);
+    txt(ctx,"Vol "+nf(d.volume),cx,cy-bh/2-14,ink(sk),"bold 14px "+sans(sk));
+  };
+  D["sphere-volume"]=function(ctx,W,H,d,sk){
+    const cx=W/2, cy=H/2, R=Math.min(W,H)*0.3;
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI); ctx.fillStyle=acc(sk); ctx.fill();
+    try{ const g=ctx.createRadialGradient(cx-R*0.35,cy-R*0.35,R*0.1,cx,cy,R);
+      g.addColorStop(0,C(sk,"paper3","#efe7da")); g.addColorStop(1,acc(sk));
+      ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI); ctx.fillStyle=g; ctx.fill(); }catch(e){}
+    ctx.strokeStyle=acc(sk); ctx.lineWidth=2; ctx.stroke();
+    // equator ellipse for 3D feel
+    ctx.strokeStyle=soft(sk); ctx.setLineDash([3,3]); ctx.beginPath(); ctx.ellipse(cx,cy,R,R*0.32,0,0,2*Math.PI); ctx.stroke(); ctx.setLineDash([]);
+    dimLabel(ctx,cx+R*0.5,cy-6,"r="+nf(d.radius),sk);
+    txt(ctx,"Vol "+nf(d.volume),cx,cy-R-10,ink(sk),"bold 14px "+sans(sk));
+    txt(ctx,"SA "+nf(d.surface_area),cx,cy+R+20,soft(sk),"12px "+mono(sk));
+  };
+  D["cylinder-volume"]=function(ctx,W,H,d,sk){
+    const cx=W/2, cy=H/2, rx=Math.min(W*0.18,90), ry=rx*0.34, hh=Math.min(H*0.4,120);
+    const top=cy-hh/2, bot=cy+hh/2; const a=acc(sk), p2=paper2(sk);
+    ctx.fillStyle=p2; ctx.fillRect(cx-rx,top,2*rx,hh);
+    ctx.strokeStyle=a; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(cx-rx,top); ctx.lineTo(cx-rx,bot); ctx.moveTo(cx+rx,top); ctx.lineTo(cx+rx,bot); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(cx,bot,rx,ry,0,0,Math.PI,false); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(cx,top,rx,ry,0,0,2*Math.PI); ctx.fillStyle=C(sk,"paper3","#e6ded0"); ctx.fill(); ctx.stroke();
+    dimLabel(ctx,cx+rx+14,cy,"h="+nf(d.height||""),sk); dimLabel(ctx,cx,top-ry-4,"r="+nf(d.radius||""),sk);
+    txt(ctx,"Vol "+nf(d.volume),cx,bot+ry+20,ink(sk),"bold 14px "+sans(sk));
+  };
+  D["cone-volume"]=function(ctx,W,H,d,sk){
+    const cx=W/2, rx=Math.min(W*0.2,100), ry=rx*0.32, apexY=H*0.24, baseY=H*0.72;
+    const a=acc(sk), p2=paper2(sk);
+    // cone body
+    ctx.beginPath(); ctx.moveTo(cx,apexY); ctx.lineTo(cx-rx,baseY); 
+    ctx.ellipse(cx,baseY,rx,ry,0,Math.PI,0,true); ctx.lineTo(cx,apexY); ctx.closePath();
+    ctx.fillStyle=p2; ctx.fill(); ctx.strokeStyle=a; ctx.lineWidth=2; ctx.stroke();
+    // base ellipse front
+    ctx.beginPath(); ctx.ellipse(cx,baseY,rx,ry,0,0,Math.PI,false); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(cx,baseY,rx,ry,0,0,2*Math.PI); ctx.setLineDash([3,3]); ctx.strokeStyle=soft(sk); ctx.stroke(); ctx.setLineDash([]);
+    // height
+    ctx.strokeStyle=soft(sk); ctx.setLineDash([4,3]); ctx.beginPath(); ctx.moveTo(cx,apexY); ctx.lineTo(cx,baseY); ctx.stroke(); ctx.setLineDash([]);
+    dimLabel(ctx,cx+12,(apexY+baseY)/2,"h="+nf(d.height||""),sk); dimLabel(ctx,cx-rx/2,baseY+ry+12,"r="+nf(d.radius||""),sk);
+    txt(ctx,"Vol "+nf(d.volume)+"  slant "+nf(d.slant_height),cx,apexY-8,ink(sk),"bold 13px "+sans(sk));
+  };
+  D["square-pyramid-volume"]=function(ctx,W,H,d,sk){
+    const cx=W/2, apexY=H*0.24, baseY=H*0.7, bw=Math.min(W*0.42,200), dx=bw*0.28, dy=-bw*0.12;
+    const a=acc(sk), p2=paper2(sk), p3=C(sk,"paper3","#e6ded0");
+    const fl=[cx-bw/2,baseY], fr=[cx+bw/2,baseY], br=[cx+bw/2+dx,baseY+dy], bl=[cx-bw/2+dx,baseY+dy], apex=[cx+dx/2,apexY];
+    iso(ctx,[bl,br,apex],p3,a); // back-right face (light)
+    iso(ctx,[fl,fr,apex],p2,a); // front face
+    iso(ctx,[fr,br,apex],p2,a); // right face
+    ctx.strokeStyle=soft(sk); ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(bl[0],bl[1]); ctx.lineTo(apex[0],apex[1]); ctx.stroke(); ctx.setLineDash([]);
+    dimLabel(ctx,cx,baseY+22,"base a, height h",sk);
+    txt(ctx,"Vol "+nf(d.volume),cx,apexY-8,ink(sk),"bold 14px "+sans(sk));
+  };
+  D["torus-volume"]=function(ctx,W,H,d,sk){
+    const cx=W/2, cy=H/2, Ro=Math.min(W,H)*0.34, tube=Ro*0.34;
+    const a=acc(sk);
+    ctx.strokeStyle=a; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(cx,cy,Ro,Ro*0.5,0,0,2*Math.PI); ctx.stroke();              // outer
+    ctx.beginPath(); ctx.ellipse(cx,cy,Ro-tube,(Ro-tube)*0.5,0,0,2*Math.PI); ctx.strokeStyle=soft(sk); ctx.stroke(); // inner hole
+    // tube shading band
+    ctx.strokeStyle=a; ctx.lineWidth=tube*0.9; ctx.globalAlpha=0.25;
+    ctx.beginPath(); ctx.ellipse(cx,cy,Ro-tube/2,(Ro-tube/2)*0.5,0,0,2*Math.PI); ctx.stroke(); ctx.globalAlpha=1; ctx.lineWidth=2;
+    dimLabel(ctx,cx,cy,"R, r",sk);
+    txt(ctx,"Vol "+nf(d.volume),cx,cy-Ro*0.5-10,ink(sk),"bold 14px "+sans(sk));
+  };
+
+  window.NCDiagrams=D;
+})();
+/* Part 2: Engineering + Business/Finance + Sports + Real Estate + Business Simulation diagrams.
+   Appended onto window.NCDiagrams (created by diagrams.js). */
+(function(){
+  const D=window.NCDiagrams;
+  function C(sk,k,f){ return (sk&&sk[k])||f; }
+  function txt(ctx,s,x,y,col,font,align){ ctx.fillStyle=col; ctx.font=font; ctx.textAlign=align||"center"; ctx.fillText(s,x,y); }
+  function nf(x){ if(x==null||isNaN(x))return ""; if(Math.abs(x)>=1e6||(x!==0&&Math.abs(x)<1e-3))return Number(x).toPrecision(4);
+    if(Math.abs(x-Math.round(x))<1e-9)return String(Math.round(x)); return (Math.round(x*1000)/1000).toString(); }
+  function ink(sk){return C(sk,"ink","#2b2b2b");} function acc(sk){return C(sk,"accent","#b4532a");}
+  function soft(sk){return C(sk,"inkSoft","#8a8a8a");} function p2(sk){return C(sk,"paper2","#f1ece2");}
+  function yes(sk){return C(sk,"yes","#2f7a52");} function mono(sk){return C(sk,"mono","monospace");}
+  function sans(sk){return C(sk,"sans","sans-serif");}
+  function axis(ctx,W,H,sk){ ctx.strokeStyle=C(sk,"rule","#ddd"); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(46,H-40); ctx.lineTo(W-30,H-40); ctx.stroke(); }
+
+  // generic two-bar before/after
+  function twoBar(ctx,W,H,sk,a,b,la,lb,title){
+    axis(ctx,W,H,sk); const base=H-40, top=46, maxV=Math.max(Math.abs(a),Math.abs(b),1e-9);
+    const bw=Math.min(90,(W-140)/2); const x1=W*0.35-bw/2, x2=W*0.65-bw/2;
+    const ha=(Math.abs(a)/maxV)*(base-top), hb=(Math.abs(b)/maxV)*(base-top);
+    ctx.fillStyle=soft(sk); ctx.fillRect(x1,base-ha,bw,ha);
+    ctx.fillStyle=acc(sk); ctx.fillRect(x2,base-hb,bw,hb);
+    ctx.lineWidth=1.4; ctx.strokeStyle=ink(sk); ctx.strokeRect(x1,base-ha,bw,ha); ctx.strokeRect(x2,base-hb,bw,hb);
+    txt(ctx,nf(a),x1+bw/2,base-ha-6,ink(sk),"bold 12px "+sans(sk));
+    txt(ctx,nf(b),x2+bw/2,base-hb-6,ink(sk),"bold 12px "+sans(sk));
+    txt(ctx,la,x1+bw/2,base+16,soft(sk),"11px "+mono(sk)); txt(ctx,lb,x2+bw/2,base+16,soft(sk),"11px "+mono(sk));
+    if(title) txt(ctx,title,W/2,top-18,ink(sk),"bold 13px "+sans(sk));
+  }
+  // series of bars (growth)
+  function series(ctx,W,H,sk,arr,title){
+    axis(ctx,W,H,sk); const base=H-40, top=40; const n=arr.length||1;
+    const maxV=Math.max.apply(null,arr.map(Math.abs).concat([1e-9]));
+    const gap=4, bw=Math.max(3,(W-90)/n-gap); let x=50;
+    for(let i=0;i<n;i++){ const h=(Math.abs(arr[i])/maxV)*(base-top);
+      ctx.fillStyle=(i===n-1)?acc(sk):soft(sk); ctx.fillRect(x,base-h,bw,h); x+=bw+gap; }
+    // trend line on top
+    ctx.strokeStyle=acc(sk); ctx.lineWidth=2; ctx.beginPath(); x=50;
+    for(let i=0;i<n;i++){ const h=(Math.abs(arr[i])/maxV)*(base-top); const px=x+bw/2, py=base-h; i?ctx.lineTo(px,py):ctx.moveTo(px,py); x+=bw+gap; } ctx.stroke();
+    if(title) txt(ctx,title,W/2,22,ink(sk),"bold 13px "+sans(sk));
+    txt(ctx,nf(arr[n-1]),50+(n-1)*(bw+gap)+bw/2,base-((Math.abs(arr[n-1])/maxV)*(base-top))-6,ink(sk),"bold 11px "+sans(sk));
+  }
+  // funnel
+  function funnel(ctx,W,H,sk,stages,title){
+    const top=44, bottom=H-30, cx=W/2; const n=stages.length; const segH=(bottom-top)/n;
+    const wTop=Math.min(W*0.6,300), wBot=wTop*0.25;
+    for(let i=0;i<n;i++){ const y0=top+i*segH, y1=y0+segH-3;
+      const w0=wTop-(wTop-wBot)*(i/n), w1=wTop-(wTop-wBot)*((i+1)/n);
+      ctx.beginPath(); ctx.moveTo(cx-w0/2,y0); ctx.lineTo(cx+w0/2,y0); ctx.lineTo(cx+w1/2,y1); ctx.lineTo(cx-w1/2,y1); ctx.closePath();
+      ctx.fillStyle=(i%2)?p2(sk):acc(sk); ctx.globalAlpha=(i%2)?1:0.8; ctx.fill(); ctx.globalAlpha=1;
+      ctx.strokeStyle=ink(sk); ctx.lineWidth=1; ctx.stroke();
+      txt(ctx,nf(stages[i])+"%",cx,y0+segH/2+4,ink(sk),"11px "+mono(sk));
+    }
+    if(title) txt(ctx,title,cx,22,ink(sk),"bold 13px "+sans(sk));
+  }
+  // horizontal gauge 0..1 with marker
+  function gauge(ctx,W,H,sk,frac,label,zones){
+    const x0=50,x1=W-50,y=H/2; frac=Math.max(0,Math.min(1,frac));
+    ctx.lineWidth=14; ctx.lineCap="round";
+    ctx.strokeStyle=C(sk,"rule","#ddd"); ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x1,y); ctx.stroke();
+    ctx.strokeStyle=acc(sk); ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x0+(x1-x0)*frac,y); ctx.stroke();
+    ctx.lineCap="butt"; ctx.fillStyle=ink(sk); ctx.beginPath(); ctx.arc(x0+(x1-x0)*frac,y,8,0,2*Math.PI); ctx.fill();
+    txt(ctx,label,W/2,y-26,ink(sk),"bold 14px "+sans(sk));
+    txt(ctx,"0",x0,y+28,soft(sk),"10px "+mono(sk)); txt(ctx,"max",x1,y+28,soft(sk),"10px "+mono(sk));
+  }
+
+  /* ---------- ENGINEERING ---------- */
+  D["concrete-volume"]=function(ctx,W,H,d,sk){
+    // draw a slab (cuboid) with volume label
+    const cx=W/2, cy=H/2+6, bw=Math.min(W*0.42,200), bh=Math.min(H*0.26,80), dx=bw*0.3, dy=-bh*0.5;
+    const a=acc(sk);
+    const F=[[cx-bw/2,cy-bh/2],[cx+bw/2,cy-bh/2],[cx+bw/2,cy+bh/2],[cx-bw/2,cy+bh/2]];
+    function poly(p,col){ctx.beginPath();p.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));ctx.closePath();ctx.fillStyle=col;ctx.fill();ctx.strokeStyle=a;ctx.lineWidth=1.6;ctx.stroke();}
+    poly([F[0],F[1],[F[1][0]+dx,F[1][1]+dy],[F[0][0]+dx,F[0][1]+dy]],C(sk,"paper3","#e6ded0"));
+    poly([F[1],F[2],[F[2][0]+dx,F[2][1]+dy],[F[1][0]+dx,F[1][1]+dy]],p2(sk));
+    poly(F,p2(sk));
+    txt(ctx,nf(d.volume_with_wastage_m3)+" m\u00b3",cx,cy+bh/2+24,ink(sk),"bold 14px "+sans(sk));
+    txt(ctx,"\u2248 "+(d.bags_estimate||"")+" bags",cx,cy-bh/2-12,soft(sk),"12px "+mono(sk));
+  };
+  D["beam-deflection"]=function(ctx,W,H,d,sk){
+    const x0=60,x1=W-60,y=H*0.45; const sag=Math.min(40, (d.deflection_mm||0)*4+8);
+    // supports
+    ctx.fillStyle=soft(sk); ctx.beginPath(); ctx.moveTo(x0-8,y+10);ctx.lineTo(x0+8,y+10);ctx.lineTo(x0,y);ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x1-8,y+10);ctx.lineTo(x1+8,y+10);ctx.lineTo(x1,y);ctx.fill();
+    // deflected beam (quadratic-ish curve dipping at centre)
+    ctx.strokeStyle=acc(sk); ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(x0,y);
+    ctx.quadraticCurveTo((x0+x1)/2,y+sag*2,x1,y); ctx.stroke();
+    // load arrow at centre
+    const cx=(x0+x1)/2; ctx.strokeStyle=ink(sk); ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(cx,y-34); ctx.lineTo(cx,y+sag-2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx-5,y+sag-10);ctx.lineTo(cx,y+sag-2);ctx.lineTo(cx+5,y+sag-10);ctx.stroke();
+    txt(ctx,"P",cx+10,y-30,ink(sk),"12px "+mono(sk));
+    txt(ctx,"\u03b4 = "+nf(d.deflection_mm)+" mm",W/2,H-16,ink(sk),"bold 13px "+sans(sk));
+  };
+  D["brick-quantity"]=function(ctx,W,H,d,sk){
+    // brick wall: rows of bricks, offset bond
+    const x0=46,y0=44,wallW=W-92,wallH=H-90; const rows=6, perRow=8; const bh=wallH/rows;
+    ctx.strokeStyle=C(sk,"rule","#ddd");
+    for(let r=0;r<rows;r++){ const off=(r%2)? (wallW/perRow)/2 : 0; const bw=wallW/perRow;
+      for(let c=-1;c<perRow+1;c++){ const x=x0+off+c*bw; if(x<x0-1||x>x0+wallW-2)continue;
+        ctx.fillStyle=((r+c)%2)?p2(sk):acc(sk); ctx.globalAlpha=((r+c)%2)?1:0.55;
+        ctx.fillRect(x+1.5,y0+r*bh+1.5,bw-3,bh-3); ctx.globalAlpha=1;
+        ctx.strokeRect(x+1.5,y0+r*bh+1.5,bw-3,bh-3); } }
+    txt(ctx,"\u2248 "+(d.bricks_estimate||"")+" bricks",W/2,H-16,ink(sk),"bold 14px "+sans(sk));
+  };
+
+  /* ---------- BUSINESS & FINANCE ---------- */
+  function impactBars(ctx,W,H,d,sk){ // before/after where available
+    const before = d.current_revenue ?? d.base ?? d.old_profit ?? d.revenue_before ?? d.tax_before ?? d.interest_before ?? d.ltv_before ?? d.ratio_before;
+    const after  = d.new_revenue ?? d.new_value ?? d.new_profit ?? d.revenue_after ?? d.tax_after ?? d.interest_after ?? d.ltv_after ?? d.ratio_after;
+    if(typeof before==="number" && typeof after==="number"){ twoBar(ctx,W,H,sk,before,after,"before","after",null); return true; }
+    return false;
+  }
+  ["revenue-impact","sales-volume-impact","salary-increase-impact","gdp-growth-impact"].forEach(s=>{
+    D[s]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk, d.base, d.new_value, "current","new", null);
+      txt(ctx,(d.delta>=0?"+":"")+nf(d.delta),W/2,28,d.delta>=0?yes(sk):acc(sk),"bold 13px "+sans(sk)); };
+  });
+  D["profit-impact"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.old_profit,d.new_profit,"old profit","new profit"); };
+  D["price-change-impact"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.old_revenue,d.new_revenue,"old rev","new rev"); };
+  D["conversion-rate-impact"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.conversions_before,d.conversions_after,"before","after"); };
+  D["marketing-spend-impact"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.revenue_before,d.revenue_after,"rev now","rev after"); };
+  D["customer-retention-impact"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.kept_before,d.kept_after,"kept now","kept after"); };
+  D["churn-rate-impact"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.annual_lost_before,d.annual_lost_after,"lost now","lost after"); };
+  D["cac-reduction-impact"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.customers_before,d.customers_after,"cust now","cust after"); };
+  D["ltv-improvement-impact"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.ltv_before,d.ltv_after,"LTV now","LTV after"); };
+  D["inflation-impact"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.real_value,d.future_price,"real value","future price"); };
+  D["investment-return-impact"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.principal,d.future_value,"principal","future"); };
+  D["interest-rate-change-impact"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.interest_before,d.interest_after,"now","after"); };
+  D["tax-rate-change-impact"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.net_before,d.net_after,"take-home now","after"); };
+  D["portfolio-risk-impact"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.weighted_average_percent,d.portfolio_volatility_percent,"weighted avg %","portfolio %");
+    txt(ctx,"diversification saves "+nf(d.diversification_benefit_percent)+" pts",W/2,H-12,soft(sk),"11px "+mono(sk)); };
+  D["markup"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.cost,d.price,"cost","price");
+    txt(ctx,"margin "+nf(d.margin_percent)+"%",W/2,28,ink(sk),"bold 12px "+sans(sk)); };
+  D["commission"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.base_pay,d.total_pay,"base","total pay"); };
+
+  /* ---------- BUSINESS SIMULATION ---------- */
+  D["saas-growth-forecast"]=function(ctx,W,H,d,sk){ series(ctx,W,H,sk, d.trajectory||[d.ending_mrr], "MRR over months"); };
+  D["ltv-growth-simulator"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.ltv_before,d.ltv_after,"LTV now","LTV after"); };
+  D["cac-impact-simulator"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.ratio_before,d.ratio_after,"LTV:CAC now","after");
+    txt(ctx,"3:1 target",W*0.65,30,soft(sk),"11px "+mono(sk)); };
+  D["funnel-optimization"]=function(ctx,W,H,d,sk){
+    // reconstruct stage rates from overall? show before/after overall as a 3-stage funnel proxy
+    const b=d.overall_rate_before_percent||1, a=d.overall_rate_after_percent||1;
+    funnel(ctx,W,H,sk,[100, Math.max(a,b), Math.min(a,b)], "Funnel (overall "+nf(b)+"% \u2192 "+nf(a)+"%)"); };
+  D["pricing-strategy-impact-model"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.profit_before,d.profit_after,"profit now","profit after"); };
+
+  /* ---------- REAL ESTATE ---------- */
+  D["rental-yield"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.gross_yield_percent,d.net_yield_percent,"gross %","net %"); };
+  D["property-roi-advanced"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.cash_on_cash_percent,d.total_roi_percent,"cash-on-cash %","total ROI %"); };
+  D["break-even-property-advanced"]=function(ctx,W,H,d,sk){ gauge(ctx,W,H,sk, Math.min(1,(d.years_to_break_even||0)/15), nf(d.years_to_break_even)+" yrs to break even"); };
+  D["buy-vs-rent"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.net_cost_of_buying,d.cost_of_renting,"buy cost","rent cost"); };
+  D["cashflow-simulation"]=function(ctx,W,H,d,sk){
+    const v=d.annual_cashflow||0; axis(ctx,W,H,sk); const cx=W/2, base=H-40, top=46;
+    const h=Math.min(base-top, Math.abs(v)/Math.max(1,Math.abs(v))* (base-top)*0.7+20);
+    ctx.fillStyle=(v>=0)?yes(sk):acc(sk); ctx.fillRect(cx-50,base-h,100,h); ctx.strokeStyle=ink(sk); ctx.strokeRect(cx-50,base-h,100,h);
+    txt(ctx,(v>=0?"+":"")+nf(v)+"/yr",cx,base-h-8,ink(sk),"bold 13px "+sans(sk));
+    txt(ctx,(v>=0?"positive cashflow":"negative gearing"),cx,base+18,soft(sk),"11px "+mono(sk)); };
+  D["mortgage-stress-test"]=function(ctx,W,H,d,sk){
+    twoBar(ctx,W,H,sk,d.payment_now,d.payment_stressed,"now/mo","stressed/mo");
+    const passing = d.passes; txt(ctx, passing?"PASS \u2264 limit":"FAIL > limit", W/2, 28, passing?yes(sk):acc(sk), "bold 13px "+sans(sk)); };
+
+  window.NCDiagrams=D;
+})();
+/* Part 3: Sports diagrams + generic fallback. */
+(function(){
+  const D=window.NCDiagrams;
+  function C(sk,k,f){ return (sk&&sk[k])||f; }
+  function txt(ctx,s,x,y,col,font,align){ ctx.fillStyle=col; ctx.font=font; ctx.textAlign=align||"center"; ctx.fillText(s,x,y); }
+  function nf(x){ if(x==null||isNaN(x))return ""; if(Math.abs(x)>=1e6||(x!==0&&Math.abs(x)<1e-3))return Number(x).toPrecision(4);
+    if(Math.abs(x-Math.round(x))<1e-9)return String(Math.round(x)); return (Math.round(x*1000)/1000).toString(); }
+  function ink(sk){return C(sk,"ink","#2b2b2b");} function acc(sk){return C(sk,"accent","#b4532a");}
+  function soft(sk){return C(sk,"inkSoft","#8a8a8a");} function p2(sk){return C(sk,"paper2","#f1ece2");}
+  function yes(sk){return C(sk,"yes","#2f7a52");} function mono(sk){return C(sk,"mono","monospace");}
+  function sans(sk){return C(sk,"sans","sans-serif");}
+  function rule(sk){return C(sk,"rule","#ddd");}
+
+  // semicircular gauge for a 0..max value, with the number in the middle
+  function dialGauge(ctx,W,H,sk,frac,centerLabel,sub){
+    frac=Math.max(0,Math.min(1,frac)); const cx=W/2, cy=H*0.66, R=Math.min(W*0.32,H*0.42);
+    ctx.lineWidth=16; ctx.lineCap="round";
+    ctx.strokeStyle=rule(sk); ctx.beginPath(); ctx.arc(cx,cy,R,Math.PI,2*Math.PI); ctx.stroke();
+    ctx.strokeStyle=acc(sk); ctx.beginPath(); ctx.arc(cx,cy,R,Math.PI,Math.PI+Math.PI*frac); ctx.stroke();
+    ctx.lineCap="butt";
+    txt(ctx,centerLabel,cx,cy-6,ink(sk),"bold 20px "+sans(sk));
+    if(sub) txt(ctx,sub,cx,cy+16,soft(sk),"11px "+mono(sk));
+  }
+  // single value "scoreboard" with optional comparison tick
+  function scoreboard(ctx,W,H,sk,value,label,note,good){
+    const cx=W/2, cy=H/2;
+    ctx.fillStyle=p2(sk); ctx.strokeStyle=rule(sk); ctx.lineWidth=1;
+    const bw=Math.min(W*0.5,240), bh=70; ctx.fillRect(cx-bw/2,cy-bh/2-6,bw,bh); ctx.strokeRect(cx-bw/2,cy-bh/2-6,bw,bh);
+    txt(ctx,value,cx,cy+6,(good===true?yes(sk):(good===false?acc(sk):ink(sk))),"bold 26px "+mono(sk));
+    txt(ctx,label,cx,cy-bh/2-14,ink(sk),"bold 13px "+sans(sk));
+    if(note) txt(ctx,note,cx,cy+bh/2+14,soft(sk),"11px "+mono(sk));
+  }
+  function axis(ctx,W,H,sk){ ctx.strokeStyle=rule(sk); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(46,H-40); ctx.lineTo(W-30,H-40); ctx.stroke(); }
+  function twoBar(ctx,W,H,sk,a,b,la,lb){
+    axis(ctx,W,H,sk); const base=H-40, top=46, maxV=Math.max(Math.abs(a),Math.abs(b),1e-9);
+    const bw=Math.min(90,(W-140)/2); const x1=W*0.35-bw/2, x2=W*0.65-bw/2;
+    const ha=(Math.abs(a)/maxV)*(base-top), hb=(Math.abs(b)/maxV)*(base-top);
+    ctx.fillStyle=soft(sk); ctx.fillRect(x1,base-ha,bw,ha); ctx.fillStyle=acc(sk); ctx.fillRect(x2,base-hb,bw,hb);
+    ctx.lineWidth=1.4; ctx.strokeStyle=ink(sk); ctx.strokeRect(x1,base-ha,bw,ha); ctx.strokeRect(x2,base-hb,bw,hb);
+    txt(ctx,nf(a),x1+bw/2,base-ha-6,ink(sk),"bold 12px "+sans(sk)); txt(ctx,nf(b),x2+bw/2,base-hb-6,ink(sk),"bold 12px "+sans(sk));
+    txt(ctx,la,x1+bw/2,base+16,soft(sk),"11px "+mono(sk)); txt(ctx,lb,x2+bw/2,base+16,soft(sk),"11px "+mono(sk));
+  }
+  function pitch(ctx,W,H,sk){ // football pitch backdrop
+    const x=40,y=36,w=W-80,h=H-90; ctx.strokeStyle=rule(sk); ctx.lineWidth=1.5; ctx.strokeRect(x,y,w,h);
+    ctx.beginPath(); ctx.moveTo(x+w/2,y); ctx.lineTo(x+w/2,y+h); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x+w/2,y+h/2,h*0.16,0,2*Math.PI); ctx.stroke(); }
+
+  // FOOTBALL
+  D["goal-win-probability-impact"]=function(ctx,W,H,d,sk){ dialGauge(ctx,W,H,sk,(d.win_prob_after||0)/100, nf(d.win_prob_after)+"%", "win prob (was "+nf(d.win_prob_before)+"%)"); };
+  D["xg-impact"]=function(ctx,W,H,d,sk){ pitch(ctx,W,H,sk); twoBar(ctx,W,H,sk,d.team_xg,(d.team_xg-d.xg_difference),"xG for","xG against");
+    txt(ctx,"xG "+nf(d.team_xg),W/2,24,ink(sk),"bold 13px "+sans(sk)); };
+  D["player-performance-impact"]=function(ctx,W,H,d,sk){ scoreboard(ctx,W,H,sk,nf(d.impact_per90),"impact / 90 min","illustrative index"); };
+  D["assist-impact"]=function(ctx,W,H,d,sk){ dialGauge(ctx,W,H,sk,Math.min(1,(d.assist_share_percent||0)/100), nf(d.involvements_per90), "involvements/90 \u00b7 "+nf(d.assist_share_percent)+"% assists"); };
+  D["possession-impact"]=function(ctx,W,H,d,sk){ dialGauge(ctx,W,H,sk,(d.possession_percent||0)/100, nf(d.possession_percent)+"%", "possession \u00b7 "+nf(d.passes_per_minute)+" passes/min"); };
+  D["defensive-impact-football"]=function(ctx,W,H,d,sk){ scoreboard(ctx,W,H,sk,nf(d.defensive_per90),"defensive actions / 90","illustrative index"); };
+  D["transfer-value-impact"]=function(ctx,W,H,d,sk){ scoreboard(ctx,W,H,sk,nf(d.estimated_value_m)+"M","illustrative value","age\u00d7"+nf(d.age_factor)+" contract\u00d7"+nf(d.contract_factor)); };
+  D["injury-impact-football"]=function(ctx,W,H,d,sk){ scoreboard(ctx,W,H,sk,nf(d.points_lost),"league points forgone", nf(d.matches_missed)+" matches \u00d7 "+nf(d.ppg_gap)+" ppg", false); };
+  // BASKETBALL
+  D["player-efficiency-impact"]=function(ctx,W,H,d,sk){ scoreboard(ctx,W,H,sk,nf(d.efficiency),"Efficiency (EFF)","standard NBA metric", d.efficiency>=15); };
+  D["points-impact"]=function(ctx,W,H,d,sk){ dialGauge(ctx,W,H,sk,Math.min(1,(d.true_shooting_percent||0)/80), nf(d.true_shooting_percent)+"%", "true shooting (55%+ good)"); };
+  D["defensive-impact-basketball"]=function(ctx,W,H,d,sk){ scoreboard(ctx,W,H,sk,nf(d.defensive_per36),"defence / 36 min", nf(d.stocks)+" stocks \u00b7 illustrative"); };
+  D["win-shares-impact"]=function(ctx,W,H,d,sk){ scoreboard(ctx,W,H,sk,nf(d.win_shares),"win shares (illustrative)", nf(d.marginal_ppg)+" marginal ppg"); };
+  D["lineup-impact"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.offensive_rating,d.defensive_rating,"off rating","def rating");
+    txt(ctx,"net "+(d.net_rating>=0?"+":"")+nf(d.net_rating),W/2,26,d.net_rating>=0?yes(sk):acc(sk),"bold 13px "+sans(sk)); };
+  D["shot-selection-impact"]=function(ctx,W,H,d,sk){ twoBar(ctx,W,H,sk,d.fg_percent,d.efg_percent,"FG%","eFG%"); };
+  // CRICKET
+  D["batting-strike-rate-impact"]=function(ctx,W,H,d,sk){ dialGauge(ctx,W,H,sk,Math.min(1,(d.strike_rate||0)/250), nf(d.strike_rate), "strike rate (runs/100 balls)"); };
+  D["economy-rate-impact"]=function(ctx,W,H,d,sk){ dialGauge(ctx,W,H,sk,Math.min(1,(d.economy_rate||0)/12), nf(d.economy_rate), "economy (runs/over, lower better)"); };
+  D["batting-impact"]=function(ctx,W,H,d,sk){ scoreboard(ctx,W,H,sk,nf(d.impact_score),"batting impact","SR "+nf(d.strike_rate)+" \u00b7 illustrative"); };
+  D["bowling-impact"]=function(ctx,W,H,d,sk){ scoreboard(ctx,W,H,sk,nf(d.impact_rating),"bowling impact","econ "+nf(d.economy)+" \u00b7 illustrative"); };
+  D["match-outcome-impact"]=function(ctx,W,H,d,sk){ dialGauge(ctx,W,H,sk,(d.chase_probability||0)/100, nf(d.chase_probability)+"%", "chase prob \u00b7 RRR "+nf(d.required_run_rate)); };
+  D["player-form-impact"]=function(ctx,W,H,d,sk){ dialGauge(ctx,W,H,sk,Math.min(1,(d.form_index||0)/2), nf(d.form_index), "form index (1 = career avg)"); };
+  // OTHER SPORTS
+  D["tennis-momentum"]=function(ctx,W,H,d,sk){ dialGauge(ctx,W,H,sk,Math.min(1,(d.recent_win_share||0)/100), nf(d.momentum_index), "momentum \u00b7 "+nf(d.recent_win_share)+"% recent games"); };
+  D["f1-pit-stop-impact"]=function(ctx,W,H,d,sk){ const v=d.net_time_s||0; axis(ctx,W,H,sk); const cx=W/2, base=H-40, top=46;
+    const h=Math.min(base-top-10, Math.abs(v)*6+14); ctx.fillStyle=(v>=0)?yes(sk):acc(sk); ctx.fillRect(cx-50,base-h,100,h); ctx.strokeStyle=ink(sk); ctx.strokeRect(cx-50,base-h,100,h);
+    txt(ctx,(v>=0?"+":"")+nf(v)+" s",cx,base-h-8,ink(sk),"bold 14px "+sans(sk));
+    txt(ctx,(v>=0?"stop pays off":"stop costs time")+" \u00b7 "+(d.positions_delta>=0?"+":"")+nf(d.positions_delta)+" places",cx,base+18,soft(sk),"11px "+mono(sk)); };
+  D["training-load-impact"]=function(ctx,W,H,d,sk){ const a=d.acwr||0;
+    // ACWR gauge with sweet-spot band 0.8-1.3 of a 0..2 scale
+    const x0=50,x1=W-50,y=H/2; ctx.lineWidth=16; ctx.lineCap="round";
+    ctx.strokeStyle=rule(sk); ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x1,y); ctx.stroke();
+    function px(v){return x0+(x1-x0)*Math.min(1,v/2);}
+    ctx.strokeStyle=yes(sk); ctx.beginPath(); ctx.moveTo(px(0.8),y); ctx.lineTo(px(1.3),y); ctx.stroke(); // sweet spot
+    ctx.lineCap="butt"; ctx.fillStyle=ink(sk); ctx.beginPath(); ctx.arc(px(a),y,8,0,2*Math.PI); ctx.fill();
+    txt(ctx,"ACWR "+nf(a),W/2,y-26,ink(sk),"bold 15px "+sans(sk));
+    txt(ctx,"green = 0.8\u20131.3 sweet spot",W/2,y+30,soft(sk),"11px "+mono(sk)); };
+  D["team-chemistry-impact"]=function(ctx,W,H,d,sk){ dialGauge(ctx,W,H,sk,(d.chemistry_index||0)/100, nf(d.chemistry_index)+"/100", "chemistry index \u00b7 illustrative"); };
+  D["injury-recovery-impact"]=function(ctx,W,H,d,sk){ scoreboard(ctx,W,H,sk,nf(d.estimated_weeks)+" wks","est. recovery","illustrative \u2014 not medical advice"); };
+
+  // generic fallback (kept for safety; should rarely be used)
+  D.__fallback=function(ctx,W,H,d,sk){
+    let val=null,key=null; const pref=["result_value","value"];
+    for(const k of pref){ if(typeof d[k]==="number"){val=d[k];key=k;break;} }
+    if(val===null) for(const k in d){ if(typeof d[k]==="number"&&isFinite(d[k])){val=d[k];key=k;break;} }
+    scoreboard(ctx,W,H,sk, nf(val), (key||"result").replace(/_/g," "), "");
+  };
+
+  window.NCDiagrams=D;
+})();
+/* Part 4: Maths (Statistics + Probability) diagrams. */
+(function(){
+  const D=window.NCDiagrams;
+  function C(sk,k,f){ return (sk&&sk[k])||f; }
+  function txt(ctx,s,x,y,col,font,align){ ctx.fillStyle=col; ctx.font=font; ctx.textAlign=align||"center"; ctx.fillText(s,x,y); }
+  function nf(x){ if(x==null||isNaN(x))return ""; if(Math.abs(x)>=1e6||(x!==0&&Math.abs(x)<1e-3))return Number(x).toPrecision(4);
+    if(Math.abs(x-Math.round(x))<1e-9)return String(Math.round(x)); return (Math.round(x*1000)/1000).toString(); }
+  function ink(sk){return C(sk,"ink","#2b2b2b");} function acc(sk){return C(sk,"accent","#b4532a");}
+  function soft(sk){return C(sk,"inkSoft","#8a8a8a");} function p2(sk){return C(sk,"paper2","#f1ece2");}
+  function yes(sk){return C(sk,"yes","#2f7a52");} function mono(sk){return C(sk,"mono","monospace");}
+  function sans(sk){return C(sk,"sans","sans-serif");} function rule(sk){return C(sk,"rule","#ddd");}
+
+  // number line with each data point as a dot, plus a marker line at `mark`
+  function numberLine(ctx,W,H,sk,vals,mark,markLabel){
+    const x0=50,x1=W-40,y=H*0.6; vals=vals||[];
+    let mn=Math.min.apply(null,vals.concat([mark])), mx=Math.max.apply(null,vals.concat([mark]));
+    if(mn===mx){mn-=1;mx+=1;}
+    const sx=v=>x0+(x1-x0)*((v-mn)/(mx-mn));
+    ctx.strokeStyle=rule(sk); ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x1,y); ctx.stroke();
+    // ticks
+    txt(ctx,nf(mn),x0,y+20,soft(sk),"10px "+mono(sk)); txt(ctx,nf(mx),x1,y+20,soft(sk),"10px "+mono(sk));
+    // points
+    vals.forEach(v=>{ ctx.fillStyle=acc(sk); ctx.globalAlpha=0.7; ctx.beginPath(); ctx.arc(sx(v),y,5,0,2*Math.PI); ctx.fill(); ctx.globalAlpha=1; });
+    if(typeof mark==="number"){ const mxp=sx(mark);
+      ctx.strokeStyle=ink(sk); ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(mxp,y-34); ctx.lineTo(mxp,y+10); ctx.stroke();
+      txt(ctx,markLabel+" "+nf(mark),mxp,y-40,ink(sk),"bold 13px "+sans(sk)); }
+  }
+  // bar chart of frequencies {label:count}
+  function freqBars(ctx,W,H,sk,freq,markVals){
+    const keys=Object.keys(freq); const n=keys.length||1; axisX(ctx,W,H,sk);
+    const base=H-44, top=46, maxC=Math.max.apply(null,keys.map(k=>freq[k]).concat([1]));
+    const gap=8, bw=Math.min(60,(W-90)/n-gap); let x=54;
+    keys.forEach(k=>{ const h=(freq[k]/maxC)*(base-top); const hot=markVals&&markVals.indexOf(parseFloat(k))>=0;
+      ctx.fillStyle=hot?acc(sk):soft(sk); ctx.fillRect(x,base-h,bw,h); ctx.strokeStyle=ink(sk); ctx.lineWidth=1; ctx.strokeRect(x,base-h,bw,h);
+      txt(ctx,freq[k],x+bw/2,base-h-5,ink(sk),"11px "+sans(sk)); txt(ctx,k,x+bw/2,base+15,soft(sk),"10px "+mono(sk)); x+=bw+gap; });
+  }
+  function axisX(ctx,W,H,sk){ ctx.strokeStyle=rule(sk); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(48,H-44); ctx.lineTo(W-30,H-44); ctx.stroke(); }
+  function dial(ctx,W,H,sk,frac,center,sub){ frac=Math.max(0,Math.min(1,frac)); const cx=W/2,cy=H*0.66,R=Math.min(W*0.32,H*0.42);
+    ctx.lineWidth=16; ctx.lineCap="round"; ctx.strokeStyle=rule(sk); ctx.beginPath(); ctx.arc(cx,cy,R,Math.PI,2*Math.PI); ctx.stroke();
+    ctx.strokeStyle=acc(sk); ctx.beginPath(); ctx.arc(cx,cy,R,Math.PI,Math.PI+Math.PI*frac); ctx.stroke(); ctx.lineCap="butt";
+    txt(ctx,center,cx,cy-6,ink(sk),"bold 20px "+sans(sk)); if(sub)txt(ctx,sub,cx,cy+16,soft(sk),"11px "+mono(sk)); }
+  function scoreboard(ctx,W,H,sk,value,label,note){ const cx=W/2,cy=H/2; ctx.fillStyle=p2(sk); ctx.strokeStyle=rule(sk); ctx.lineWidth=1;
+    const bw=Math.min(W*0.5,240),bh=70; ctx.fillRect(cx-bw/2,cy-bh/2-6,bw,bh); ctx.strokeRect(cx-bw/2,cy-bh/2-6,bw,bh);
+    txt(ctx,value,cx,cy+6,ink(sk),"bold 24px "+mono(sk)); txt(ctx,label,cx,cy-bh/2-14,ink(sk),"bold 13px "+sans(sk));
+    if(note)txt(ctx,note,cx,cy+bh/2+14,soft(sk),"11px "+mono(sk)); }
+
+  D["average"]=function(ctx,W,H,d,sk){ numberLine(ctx,W,H,sk,d.values||[],d.mean,"mean"); };
+  D["median"]=function(ctx,W,H,d,sk){ numberLine(ctx,W,H,sk,d.sorted||[],d.median,"median"); };
+  D["mode"]=function(ctx,W,H,d,sk){ if(d.frequencies) freqBars(ctx,W,H,sk,d.frequencies,d.modes||[]);
+    txt(ctx,(d.modes&&d.modes.length?("mode "+d.modes.join(", ")):"no mode"),W/2,24,ink(sk),"bold 13px "+sans(sk)); };
+  D["variance"]=function(ctx,W,H,d,sk){ numberLine(ctx,W,H,sk,[],d.mean,"mean");
+    scoreboard(ctx,W,H,sk,nf(d.variance),(d.kind==="sample"?"sample":"population")+" variance","mean "+nf(d.mean)); };
+  D["standard-deviation"]=function(ctx,W,H,d,sk){ scoreboard(ctx,W,H,sk,nf(d.standard_deviation),(d.kind==="sample"?"sample":"population")+" std dev","mean "+nf(d.mean)+" \u00b7 var "+nf(d.variance)); };
+  D["probability"]=function(ctx,W,H,d,sk){ dial(ctx,W,H,sk,(d.probability||0), nf(d.percent)+"%", "favourable / total"); };
+  D["permutation"]=function(ctx,W,H,d,sk){ scoreboard(ctx,W,H,sk,nf(d.permutations), nf(d.n)+"P"+nf(d.r), "ordered arrangements"); };
+  D["combination"]=function(ctx,W,H,d,sk){ scoreboard(ctx,W,H,sk,nf(d.combinations), nf(d.n)+"C"+nf(d.r), "unordered selections"); };
+  window.NCDiagrams=D;
+})();
+
+}
+</script>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const PFX="cs";
+  const cv = $(PFX+"-canvas"), ctx = cv.getContext("2d");
+  const SLUG = "{{ calc.slug }}";
+  let last = null, mode = "direct";
+
+  function S(){ return window.NCSkin || {}; }
+
+  // Hide the framework's external steps panel — this viz keeps its own in-box toggle.
+  function hideOuterSteps(){ const ext=document.getElementById("nc-steps"); if(ext){ ext.hidden=true; ext.style.display="none"; } }
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="'+SLUG+'"]');
+    if(!panel||!window.NCSkin) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{ el.style.background=bg; el.style.color=NCSkin.ink; el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px"; });
+    panel.querySelectorAll("label span").forEach(el=>{ if(!el.classList.contains("nc-field")) el.style.color=NCSkin.ink; });
+    const d=$(PFX+"-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+    const seg=$(PFX+"-learn2");
+    if(seg){ seg.querySelectorAll("button").forEach(b=>{ const on=b.classList.contains("active"); b.style.color=on?(NCSkin.paper2||"#fff"):NCSkin.ink; b.style.background=on?(NCSkin.accent||"#888"):"transparent"; }); }
+  }
+
+  function renderSteps(steps){
+    const el=$(PFX+"-steps"); if(!el) return;
+    if(!steps||!steps.length){ el.innerHTML="<p style='opacity:.7'>No working to show for these inputs.</p>"; return; }
+    const sk=S();
+    el.innerHTML=steps.map(s=>(
+      '<div style="padding:8px 10px;border:1px solid '+(sk.rule||"#ddd")+';border-radius:8px;margin-bottom:8px">'
+      +'<div style="font-weight:600;font-size:.9rem;color:'+(sk.accent||"#444")+'">'+(s.label||"")+'</div>'
+      +'<div style="margin:3px 0;font-family:'+(sk.mono||"monospace")+';font-size:.95rem;color:'+(sk.ink||"#222")+'">'+(s.math||"")+'</div>'
+      +(s.note?'<div style="font-size:.85rem;opacity:.8;color:'+(sk.ink||"#222")+'">'+s.note+'</div>':'')
+      +'</div>')).join("");
+    if(window.MathJax && MathJax.typesetPromise){ try{ MathJax.typesetPromise([el]); }catch(e){} }
+  }
+
+  function applyMode(){
+    const out=$(PFX+"-out"), steps=$(PFX+"-steps");
+    if(mode==="steps"){ if(out)out.style.display="none"; if(steps)steps.style.display="block"; }
+    else { if(out)out.style.display="block"; if(steps)steps.style.display="none"; }
+    const seg=$(PFX+"-learn2");
+    if(seg){ seg.querySelectorAll("button").forEach(b=>{ const on=b.getAttribute("data-mode")===mode; b.classList.toggle("active",on); b.setAttribute("aria-pressed",on?"true":"false"); }); }
+    styleFields();
+  }
+
+  function readBody(){
+    const body={}; const panel = document.querySelector('.viz-panel[data-slug="'+SLUG+'"]');
+    panel.querySelectorAll("[data-k]").forEach(el=>{ const k=el.getAttribute("data-k");
+      if(el.getAttribute("data-list")){ body[k]=el.value; }
+      else if(el.tagName==="SELECT"){ body[k]=el.value; }
+      else { body[k]= el.value===""? null : parseFloat(el.value); } });
+    return body;
+  }
+
+  function draw(d){
+    if(!d){ ctx.clearRect(0,0,cv.width,cv.height); return; }
+    const sk=S(); ctx.clearRect(0,0,cv.width,cv.height);
+    const fn=(window.NCDiagrams&&(window.NCDiagrams[SLUG]||window.NCDiagrams.__fallback));
+    try{ if(fn) fn(ctx,cv.width,cv.height,d,sk); }catch(e){ /* never break the page on a draw error */ }
+  }
+
+  async function update(){
+    let data;
+    try{
+      const r=await fetch("/api/compute/"+SLUG,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(readBody())});
+      data=await r.json();
+    }catch(e){ $(PFX+"-out").textContent="compute error"; return; }
+    if(data.disclaimer) $(PFX+"-disc").textContent="\u26A0 "+data.disclaimer;
+    hideOuterSteps();
+    if(data.error){ $(PFX+"-out").innerHTML="<b>"+data.error+"</b>"; renderSteps([]); last=null; ctx.clearRect(0,0,cv.width,cv.height); return; }
+    $(PFX+"-out").innerHTML=`<div style="line-height:1.7"><b>${data.result||""}</b></div>`;
+    renderSteps(data.steps||[]);
+    try{ if(window.__ncExplain) __ncExplain(data.explanation); }catch(e){}
+    last=data; draw(last);
+  }
+
+  const panel = document.querySelector('.viz-panel[data-slug="'+SLUG+'"]');
+  panel.querySelectorAll("[data-k]").forEach(el=>{ el.addEventListener("input", update); el.addEventListener("change", update); });
+  const seg=$(PFX+"-learn2");
+  if(seg){ seg.querySelectorAll("button").forEach(b=>{ b.addEventListener("click",()=>{ mode=b.getAttribute("data-mode"); applyMode(); }); }); }
+  window.addEventListener("nc-theme-change", ()=>{ styleFields(); draw(last); });
+
+  hideOuterSteps(); applyMode(); styleFields(); update();
+})();
+</script>
