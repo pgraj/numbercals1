@@ -1,0 +1,167 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+
+  <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
+
+  <div class="viz-inputs" style="align-items:flex-start;gap:40px">
+    <label><span style="display:block;white-space:nowrap">Angle A <span id="cx-ua" style="opacity:.7">(deg)</span></span>
+      <span class="nc-field" style="display:block"><input id="cx-A" type="number" value="60" step="any"></span></label>
+    <label><span style="display:block;white-space:nowrap">Function</span>
+      <span class="nc-field" style="display:block"><select id="cx-func"><option value="sin" selected>sin</option><option value="cos">cos</option><option value="tan">tan</option></select></span></label>
+  </div>
+
+  <canvas id="cx-canvas" width="640" height="400"
+          style="display:block;width:100%;height:auto;max-width:540px;margin:8px auto 0"></canvas>
+  <p class="viz-caption" id="cx-cap" style="font-size:.9rem;margin-top:.5rem;opacity:.85;text-align:center"></p>
+
+  <div class="viz-out" id="viz-out" style="margin-top:10px"></div>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="cx-disc" style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<div class="nc-learn3" id="cx-learn3" role="group" aria-label="Answer detail"
+     style="display:inline-flex;border-radius:8px;overflow:hidden;margin:12px 0 6px">
+  <button type="button" data-mode="direct" class="active" aria-pressed="true">Direct answer</button>
+  <button type="button" data-mode="steps" aria-pressed="false">Step-by-step working</button>
+  <button type="button" data-mode="anim" aria-pressed="false">Animation</button>
+</div>
+
+<div id="cx-anim-controls" style="display:none;margin:2px 0 6px">
+  <button type="button" id="cx-play" style="cursor:pointer;border-radius:6px;padding:4px 12px">&#9654; Play</button>
+  <p id="cx-anim-note" style="font-size:.82rem;margin:6px 0 0;opacity:.8;max-width:540px"></p>
+</div>
+
+<script src="/static/ncangle.js"></script>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("cx-canvas"), ctx = cv.getContext("2d");
+  const SLUG = "{{ calc.slug }}";
+  let last = null;
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
+  function S(){ return window.NCSkin || {}; }
+  function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
+  function angLbl(deg){ return (unit()==="rad") ? (fmt(deg*Math.PI/180)+" rad") : (fmt(deg)+"\u00b0"); }
+
+
+  // rays: [{deg,name,col}]; first ray animates with t. resultText: top-left readout.
+  function drawCircle(rays, resultText, t){
+    const sk=S(); if(!window.NCSkin){ctx.clearRect(0,0,cv.width,cv.height);return;}
+    const W=cv.width,H=cv.height,cx=W/2,cy=H/2+6,R=Math.min(W,H)*0.32;
+    ctx.clearRect(0,0,W,H);
+    const ink=sk.ink||'#222',soft=sk.inkSoft||'#888',acc=sk.accent||'#b34a23',yes=sk.yes||'#2f7a52',rule=sk.rule||'#ddd';
+    ctx.strokeStyle=rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(cx-R-26,cy); ctx.lineTo(cx+R+26,cy); ctx.moveTo(cx,cy-R-26); ctx.lineTo(cx,cy+R+26); ctx.stroke();
+    ctx.strokeStyle=soft; ctx.lineWidth=1.25; ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.stroke();
+    rays.forEach((ry,i)=>{
+      const g=(t!==undefined && i===0)?t:1;
+      const shownDeg = ry.deg*g;
+      const a=shownDeg*Math.PI/180, px=cx+R*Math.cos(a), py=cy-R*Math.sin(a);
+      ctx.strokeStyle=ry.col; ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(px,py); ctx.stroke();
+      ctx.fillStyle=ry.col; ctx.beginPath(); ctx.arc(px,py,4,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle=ry.col; ctx.lineWidth=1.3; ctx.beginPath(); ctx.arc(cx,cy,22+i*9,0,-a,true); ctx.stroke();
+      ctx.fillStyle=ry.col; ctx.font='12px '+(sk.mono||'monospace');
+      ctx.textAlign=px>=cx?'left':'right'; ctx.textBaseline='middle';
+      ctx.fillText(ry.name+' = '+angLbl(shownDeg), px+(px>=cx?9:-9), py+(py>=cy?12:-12));
+    });
+    if(resultText){ ctx.fillStyle=ink; ctx.font='bold 14px '+(sk.mono||'monospace'); ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.fillText(resultText,12,22); }
+  }
+  function initInputs(){ syncU(); }
+  function syncU(){ $("cx-ua").textContent=unit()==="rad"?"(rad)":"(deg)"; }
+  function onUnitChange(){ const v=parseFloat($("cx-A").value); if(!isNaN(v)){ $("cx-A").value=(unit()==="rad")?+(v*Math.PI/180).toFixed(4):+(v*180/Math.PI).toFixed(4);} syncU(); }
+  function buildBody(){ return { A:$("cx-A").value, func:$("cx-func").value, angle_unit:unit() }; }
+  function wireInputs(update){ ["cx-A","cx-func"].forEach(id=>{ const e=$(id); e.addEventListener("input",update); e.addEventListener("change",update);}); }
+  function renderOut(d){ $("viz-out").innerHTML=`<div style="line-height:1.7"><b>${d.func}(A/2) = ${d.result}</b></div>`; }
+  function draw(d,t){ if(!d){ctx.clearRect(0,0,cv.width,cv.height);return;}
+    const rays=[{deg:d.half_deg,name:"A/2",col:(S().accent||'#b34a23')},{deg:d.A_deg,name:"A",col:(S().yes||'#2f7a52')}];
+    drawCircle(rays, `${d.func}(A/2) = ${d.result}`, t);
+    $("cx-cap").textContent="Outer ray at A, inner ray at A/2; the readout shows the result."; }
+
+
+  function styleFields(){
+    const panel=document.querySelector('.viz-panel[data-slug="'+SLUG+'"]');
+    if(!panel||!window.NCSkin) return;
+    const bg=NCSkin.paper2||"transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{ el.style.background=bg; el.style.color=NCSkin.ink; el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px"; });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const n=$("cx-anim-note"); if(n) n.style.color=NCSkin.inkSoft;
+    const d=$("cx-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  async function update(){
+    const body = buildBody();
+    let data;
+    try{ const r=await fetch("/api/compute/"+SLUG,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $("viz-out").textContent="compute error"; return; }
+    try{ if(window.NCSteps) NCSteps.render(data.steps||[]); }catch(e){}
+    if(data.disclaimer) $("cx-disc").textContent="\u26a0 "+data.disclaimer;
+    if(data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} last=null; draw(null); return; }
+    renderOut(data);
+    try{ if(window.__ncExplain) __ncExplain(data.explanation); }catch(e){}
+    last=data; draw(last);
+  }
+
+  let mode="direct", raf=null, playing=false, animStart=null;
+  const DURATION=4200;
+  const ANIM_NOTE="In trigonometry a positive angle is measured anticlockwise from the positive x-axis (the initial side), so the ray sweeps anticlockwise as the angle grows. A clockwise sweep would be a negative angle.";
+  function stepsPanel(){ return document.getElementById("nc-steps"); }
+  function styleToggle(){
+    if(!window.NCSkin) return;
+    const seg=$("cx-learn3"); seg.style.border="1px solid "+NCSkin.rule;
+    seg.querySelectorAll("button").forEach(b=>{ const on=b.classList.contains("active");
+      b.style.cursor="pointer"; b.style.border="none"; b.style.padding="6px 14px"; b.style.font="13px "+(NCSkin.sans||"sans-serif");
+      b.style.background=on?NCSkin.accent:(NCSkin.paper2||"transparent"); b.style.color=on?(NCSkin.paper||"#fff"):NCSkin.ink; });
+    const pb=$("cx-play"); if(pb){ pb.style.border="1px solid "+NCSkin.rule; pb.style.background=NCSkin.paper2||"transparent"; pb.style.color=NCSkin.ink; }
+  }
+  function stopPlay(){ if(raf){cancelAnimationFrame(raf);raf=null;} playing=false; animStart=null; const pb=$("cx-play"); if(pb)pb.innerHTML="&#9654; Play"; if(last) draw(last); }
+  function startPlay(){
+    if(raf||!last) return; playing=true; const pb=$("cx-play"); if(pb)pb.innerHTML="&#10073;&#10073; Pause";
+    function frame(ts){ if(animStart===null)animStart=ts; let t=(ts-animStart)/DURATION; if(t>=1)t=1;
+      draw(last, t); if(t<1){raf=requestAnimationFrame(frame);} else {raf=null;playing=false;const b=$("cx-play");if(b)b.innerHTML="&#9654; Play";} }
+    raf=requestAnimationFrame(frame);
+  }
+  function togglePlay(){ if(playing) stopPlay(); else startPlay(); }
+  function setMode(m){
+    mode=m; stopPlay();
+    const seg=$("cx-learn3");
+    seg.querySelectorAll("button").forEach(b=>{ const on=b.getAttribute("data-mode")===m; b.classList.toggle("active",on); b.setAttribute("aria-pressed",String(on)); });
+    const sp=stepsPanel(), animCtl=$("cx-anim-controls");
+    if(sp) sp.style.display=(m==="steps")?"":"none";
+    if(m==="steps"&&sp){ sp.hidden=false; sp.style.display=""; const w=document.getElementById("nc-steps-working"); if(w)w.click(); }
+    animCtl.style.display=(m==="anim")?"":"none";
+    if(m==="anim") $("cx-anim-note").textContent=ANIM_NOTE;
+    draw(last); styleToggle();
+  }
+  $("cx-learn3").querySelectorAll("button").forEach(b=>{ b.addEventListener("click",()=>setMode(b.getAttribute("data-mode"))); });
+  $("cx-play").addEventListener("click",togglePlay);
+
+  wireInputs(update);
+  if(window.NCAngle){ NCAngle.onChange(function(){ onUnitChange(); update(); }); }
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", styleToggle);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last); });
+
+  initInputs(); styleFields();
+  update().then(()=>{ const it=document.querySelector("#nc-steps .nc-steps-toggle"); if(it) it.style.display="none"; setMode("direct"); });
+})();
+</script>

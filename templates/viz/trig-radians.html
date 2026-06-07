@@ -1,10 +1,32 @@
 <link rel="stylesheet" href="/static/nclearn.css">
 <div class="viz-panel" data-slug="{{ calc.slug }}">
   <div class="viz-inputs">
-    <label>Direction
-      <span class="nc-field"><select id="rd-dir"><option value="deg2rad" selected>Degrees → radians</option><option value="rad2deg">Radians → degrees</option></select></span></label>
-    <label>Value
-      <span class="nc-field"><input id="rd-val" type="number" value="180" step="any"></span></label>
+    <label><span style="display:block;white-space:nowrap">Mode</span>
+      <span class="nc-field" style="display:block"><select id="rd-mode" style="width:200px">
+        <option value="convert" selected>Convert degrees ↔ radians</option>
+        <option value="arc">Arc length (s = rθ)</option>
+        <option value="sector">Sector area (½r²θ)</option>
+      </select></span></label>
+  </div>
+
+  {# Convert-mode inputs #}
+  <div class="viz-inputs" id="rd-convert-row">
+    <label><span style="display:block;white-space:nowrap">Direction</span>
+      <span class="nc-field" style="display:block"><select id="rd-dir"><option value="deg2rad" selected>Degrees → radians</option><option value="rad2deg">Radians → degrees</option></select></span></label>
+    <label style="margin-left:15px"><span style="display:block;white-space:nowrap">Value</span>
+      <span class="nc-field" style="display:block"><input id="rd-val" type="number" value="180" step="any"></span></label>
+  </div>
+
+  {# Arc/Sector-mode inputs (radius + angle + angle-unit toggle) #}
+  <div id="rd-rt-wrap" style="display:none">
+    <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
+    <div class="viz-inputs">
+      <label><span style="display:block;white-space:nowrap">Radius r</span>
+        <span class="nc-field" style="display:block"><input id="rd-radius" type="number" value="5" step="any"></span></label>
+      <label style="margin-left:15px"><span style="display:block;white-space:nowrap">Angle θ
+          <span id="rd-unit-lbl" style="opacity:.7">(rad)</span></span>
+        <span class="nc-field" style="display:block"><input id="rd-angle" type="number" value="2" step="any"></span></label>
+    </div>
   </div>
 
   <div class="viz-out" id="rd-out"></div>
@@ -36,11 +58,15 @@
 })();
 </script>
 
+<script src="/static/ncangle.js"></script>
+
 <script>
 (function(){
   const $ = id => document.getElementById(id);
   const slug = "{{ calc.slug }}";
   const P = "rd";
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "rad"); }
+  function curMode(){ return $("rd-mode").value; }
   const panel = document.querySelector('.viz-panel[data-slug="'+slug+'"]');
   let last = null;
 
@@ -57,7 +83,9 @@
   }
 
   function buildBody(){
-    return { value:$("rd-val").value, direction:$("rd-dir").value };
+    const m = curMode();
+    if(m==="convert") return { mode:"convert", value:$("rd-val").value, direction:$("rd-dir").value };
+    return { mode:m, radius:$("rd-radius").value, angle:$("rd-angle").value, angle_unit:unit() };
   }
 
   async function update(){
@@ -102,8 +130,52 @@
     const ink=s.ink||"#222", accent=s.accent||"#b50", yes=s.yes||"#3a7", soft=s.inkSoft||"#777", rule=s.rule||"#ccc";
     const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H); const cap=$(P+"-cap");
     if(!d){ if(cap) cap.textContent=""; return; }
-    drawArc(ctx,d,s,ink,accent,yes,soft,rule,1);
-    if(cap) cap.textContent="The same angle shown as degrees and as radians (arc length on a unit circle).";
+    const m = d.mode || "convert";
+    if(m==="convert"){
+      drawArc(ctx,d,s,ink,accent,yes,soft,rule,1);
+      if(cap) cap.textContent="The same angle shown as degrees and as radians (arc length on a unit circle).";
+    } else {
+      drawRT(ctx,d,s,ink,accent,yes,soft,rule,1);
+      if(cap) cap.textContent = (m==="arc")
+        ? "The bold arc is s = rθ; the radius and angle set its length."
+        : "The shaded wedge is the sector; its area is ½r²θ.";
+    }
+  }
+  // Arc-length / sector diagram: a circle of radius r (auto-scaled), the angle
+  // swept anticlockwise, with the arc (arc mode) or wedge (sector mode) marked.
+  function drawRT(ctx,d,s,ink,accent,yes,soft,rule,grow){
+    const _cv=$(P+"-diagram"), W=_cv.width, H=_cv.height;
+    const cx=W/2, cy=H/2+10;
+    const r = d.radius||1, theta=(d.radians||0)*grow;
+    const Rpx = Math.min(W,H)*0.34;             // fixed display radius; r shown via label
+    // full circle (faint)
+    ctx.strokeStyle=rule; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(cx,cy,Rpx,0,Math.PI*2); ctx.stroke();
+    // axes
+    ctx.beginPath(); ctx.moveTo(cx-Rpx-12,cy); ctx.lineTo(cx+Rpx+12,cy); ctx.moveTo(cx,cy-Rpx-12); ctx.lineTo(cx,cy+Rpx+12); ctx.stroke();
+    const mode = d.mode;
+    // sector fill
+    if(mode==="sector"){
+      ctx.fillStyle=(accent)+"33";
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,Rpx,0,-theta,true); ctx.closePath(); ctx.fill();
+    }
+    // two radii
+    ctx.strokeStyle=ink; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+Rpx,cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+Math.cos(-theta)*Rpx, cy+Math.sin(-theta)*Rpx); ctx.stroke();
+    // the arc (bold for arc mode, thinner for sector)
+    ctx.strokeStyle=accent; ctx.lineWidth=(mode==="arc")?5:3;
+    ctx.beginPath(); ctx.arc(cx,cy,Rpx,0,-theta,true); ctx.stroke();
+    // radius label
+    ctx.fillStyle=ink; ctx.font="13px "+(s.mono||"monospace"); ctx.textAlign="center";
+    ctx.fillText("r = "+fmt(r), cx+Rpx/2, cy-8);
+    // angle label near centre
+    ctx.fillStyle=accent; ctx.font="bold 14px "+(s.sans||"sans-serif");
+    const aLbl = (d.angle_unit==="rad") ? (fmt(d.radians)+" rad") : (fmt(d.angle_deg)+"\u00b0");
+    ctx.fillText("θ = "+aLbl, cx+30, cy+ (theta>Math.PI?28:-22));
+    // result label
+    ctx.fillStyle=yes; ctx.font="bold 15px "+(s.sans||"sans-serif");
+    const res = (mode==="arc") ? ("s = "+fmt(d.arc_length)) : ("A = "+fmt(d.sector_area));
+    ctx.fillText(res, cx, cy+Rpx+30);
   }
   function drawArc(ctx,d,s,ink,accent,yes,soft,rule,grow){
     const _cv=$(P+"-diagram"), W=_cv.width, H=_cv.height;
@@ -124,13 +196,39 @@
   }
 
 
-  function drawFrame(ctx,t,d){ if(!d) return; ctx.clearRect(0,0,640,320); const s=window.NCSkin||{};
+  function drawFrame(ctx,t,d){ if(!d) return; const s=window.NCSkin||{};
+    const cv=$(P+"-diagram"); ctx.clearRect(0,0,cv.width,cv.height);
     const ink=s.ink||"#222", accent=s.accent||"#b50", yes=s.yes||"#3a7", soft=s.inkSoft||"#777", rule=s.rule||"#ccc";
-    drawArc(ctx,d,s,ink,accent,yes,soft,rule,(t<0.7? t/0.7:1)); }
+    const grow=(t<0.7? t/0.7:1);
+    if((d.mode||"convert")==="convert") drawArc(ctx,d,s,ink,accent,yes,soft,rule,grow);
+    else drawRT(ctx,d,s,ink,accent,yes,soft,rule,grow); }
 
-  ["rd-val","rd-dir"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+  function applyMode(){
+    const m = curMode();
+    $("rd-convert-row").style.display = (m==="convert") ? "" : "none";
+    $("rd-rt-wrap").style.display     = (m==="convert") ? "none" : "";
+    syncUnitLabel();
+  }
+  function syncUnitLabel(){
+    const el=$("rd-unit-lbl"); if(el) el.textContent = (unit()==="rad") ? "(rad)" : "(deg)";
+  }
+
+  ["rd-val","rd-dir","rd-radius","rd-angle"].forEach(id=>{ const el=$(id); if(el){ el.addEventListener("input",update); el.addEventListener("change",update);} });
+  $("rd-mode").addEventListener("change", ()=>{ applyMode(); update(); });
+
+  if(window.NCAngle){
+    NCAngle.onChange(function(newUnit){
+      // Convert the angle field value between units (arc/sector only).
+      const el=$("rd-angle");
+      if(el){ const v=parseFloat(el.value);
+        if(!isNaN(v)){ el.value = (newUnit==="rad") ? +(v*Math.PI/180).toFixed(4) : +(v*180/Math.PI).toFixed(4); }
+      }
+      syncUnitLabel(); update();
+    });
+  }
+
   window.addEventListener("nc-theme-change", styleFields);
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });
-  styleFields();  update();
+  styleFields(); applyMode(); update();
 })();
 </script>

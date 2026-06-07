@@ -22,7 +22,7 @@ DISCLAIMER = (
 @register(
     slug="rw-tree-height",
     name="Measuring a tree's height",
-    section="real-world",
+    section="maths",
     sub="Heights & Distances",
     topic="Real-World Trigonometry",
     order=0,

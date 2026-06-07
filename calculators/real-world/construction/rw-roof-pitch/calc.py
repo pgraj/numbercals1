@@ -13,7 +13,7 @@ DISCLAIMER = (
 @register(
     slug="rw-roof-pitch",
     name="Roof pitch and rafter length",
-    section="real-world",
+    section="maths",
     sub="Construction",
     topic="Real-World Trigonometry",
     order=0,

@@ -13,7 +13,7 @@ DISCLAIMER = (
 @register(
     slug="rw-star-parallax",
     name="Distance to a star by parallax",
-    section="real-world",
+    section="maths",
     sub="Astronomy",
     topic="Real-World Trigonometry",
     order=0,

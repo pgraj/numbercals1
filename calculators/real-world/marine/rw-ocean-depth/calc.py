@@ -13,7 +13,7 @@ DISCLAIMER = (
 @register(
     slug="rw-ocean-depth",
     name="Ocean depth from angled sonar",
-    section="real-world",
+    section="maths",
     sub="Marine Biology",
     topic="Real-World Trigonometry",
     order=0,

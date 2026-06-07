@@ -1,5 +1,6 @@
 <link rel="stylesheet" href="/static/nclearn.css">
 <div class="viz-panel" data-slug="{{ calc.slug }}">
+  <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
   <div class="viz-inputs">
     <label>Side 1 length
       <span class="nc-field"><input id="iv-s1" type="number" value="5" step="any"></span></label>
@@ -40,11 +41,14 @@
 })();
 </script>
 
+<script src="/static/ncangle.js"></script>
+
 <script>
 (function(){
   const $ = id => document.getElementById(id);
   const slug = "{{ calc.slug }}";
   const P = "iv";
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
   const panel = document.querySelector('.viz-panel[data-slug="'+slug+'"]');
   let last = null;
 
@@ -61,7 +65,7 @@
   }
 
   function buildBody(){
-    return { side1:$("iv-s1").value, side1_type:$("iv-t1").value, side2:$("iv-s2").value, side2_type:$("iv-t2").value };
+    return { side1:$("iv-s1").value, side1_type:$("iv-t1").value, side2:$("iv-s2").value, side2_type:$("iv-t2").value, angle_unit:unit() };
   }
 
   async function update(){
@@ -84,6 +88,8 @@
   }
 
   function fmt(x){ if(x===null||x===undefined) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*10000)/10000).toString(); }
+  // θ label in the chosen unit (diagram geometry stays in degrees).
+  function angLabel(deg){ return (unit()==="rad") ? (fmt(deg*Math.PI/180)+" rad") : (fmt(deg)+"\u00b0"); }
 
 
   function drawDiagram(d){
@@ -92,7 +98,7 @@
     const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H); const cap=$(P+"-cap");
     if(!d){ if(cap) cap.textContent=""; return; }
     drawArc(ctx,d,s,ink,accent,yes,soft,rule,d.angle);
-    if(cap) cap.textContent="The angle arc grows to the solved value \u03b8 = "+fmt(d.angle)+"\u00b0.";
+    if(cap) cap.textContent="The angle arc grows to the solved value \u03b8 = "+angLabel(d.angle)+".";
   }
   function drawArc(ctx,d,s,ink,accent,yes,soft,rule,ang){
     const th=ang*Math.PI/180, Hpx=170;
@@ -104,7 +110,7 @@
     // filled angle arc at C grows to ang
     ctx.strokeStyle=yes; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(Cx,Cy,32,Math.PI, Math.PI-th, true); ctx.stroke();
     ctx.fillStyle=yes; ctx.font="bold 15px "+(s.sans||"sans-serif"); ctx.textAlign="center";
-    ctx.fillText("\u03b8="+fmt(ang)+"\u00b0", Cx-52, Cy-10);
+    ctx.fillText("\u03b8="+angLabel(ang), Cx-52, Cy-10);
   }
 
 
@@ -116,6 +122,9 @@
   }
 
   ["iv-s1","iv-t1","iv-s2","iv-t2"].forEach(id=>{ const el=$(id); el.addEventListener("input",update); el.addEventListener("change",update); });
+
+  if(window.NCAngle){ NCAngle.onChange(function(){ update(); }); }
+
   window.addEventListener("nc-theme-change", styleFields);
   window.addEventListener("nc-theme-change", ()=>{ if(last) drawDiagram(last); });
   styleFields();  update();

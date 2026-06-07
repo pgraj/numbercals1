@@ -13,7 +13,7 @@ DISCLAIMER = (
 @register(
     slug="rw-plane-altitude",
     name="Tracking an aircraft's altitude",
-    section="real-world",
+    section="maths",
     sub="Navigation & Aviation",
     topic="Real-World Trigonometry",
     order=0,

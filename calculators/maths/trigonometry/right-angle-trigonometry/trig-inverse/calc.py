@@ -14,6 +14,20 @@ DISCLAIMER = (
 )
 
 
+def _ang_tex(deg, unit):
+    """Solved angle as LaTeX for step math, in the chosen unit (radians = decimal)."""
+    if unit == "rad":
+        return ("%.4f" % math.radians(deg)).rstrip("0").rstrip(".") + r"\,\text{rad}"
+    return _fmt(deg) + r"^\circ"
+
+
+def _ang_disp(deg, unit):
+    """Solved angle as plain display text, in the chosen unit."""
+    if unit == "rad":
+        return ("%.4f" % math.radians(deg)).rstrip("0").rstrip(".") + " rad"
+    return _fmt(deg) + "\u00b0"
+
+
 @register(
     slug="trig-inverse",
     name="Find an angle",
@@ -36,8 +50,9 @@ DISCLAIMER = (
     ],
     viz_template="viz/trig-inverse.html",
 )
-def compute(side1=None, side1_type="opp", side2=None, side2_type="hyp"):
+def compute(side1=None, side1_type="opp", side2=None, side2_type="hyp", angle_unit="deg"):
     try:
+        unit = "rad" if str(angle_unit) == "rad" else "deg"
         if side1 in (None, "") or side2 in (None, ""):
             return _err("Enter two side lengths and say which sides they are.")
         s1, s2 = float(side1), float(side2)
@@ -83,12 +98,13 @@ def compute(side1=None, side1_type="opp", side2=None, side2_type="hyp"):
              "math": r"\(%s\)" % tex,
              "note": "Form the ratio, then apply the inverse function."},
             {"label": "Evaluate the angle",
-             "math": r"\(\theta \approx %s^\circ\)" % _fmt(angle),
-             "note": "On a calculator this is the shift/2nd key above sin, cos, or tan."},
+             "math": r"\(\theta \approx %s\)" % _ang_tex(angle, unit),
+             "note": "On a calculator this is the shift/2nd key above sin, cos, or tan; "
+                     "make sure it is set to the same mode (degrees or radians) you want the answer in."},
         ]
         return {
-            "result": _fmt(angle) + "°",
-            "angle": round(angle, 4), "ratio": round(ratio, 6), "fn": fn,
+            "result": _ang_disp(angle, unit),
+            "angle": round(angle, 4), "angle_unit": unit, "ratio": round(ratio, 6), "fn": fn,
             "steps": steps,
             "explanation": [
                 {"heading": "Inverse functions undo the ratio",

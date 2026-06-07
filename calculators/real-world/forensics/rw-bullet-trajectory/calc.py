@@ -13,7 +13,7 @@ DISCLAIMER = (
 @register(
     slug="rw-bullet-trajectory",
     name="Impact angle of a trajectory",
-    section="real-world",
+    section="maths",
     sub="Forensics",
     topic="Real-World Trigonometry",
     order=0,
