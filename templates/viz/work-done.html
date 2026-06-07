@@ -1,0 +1,322 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+
+  {# Angle-unit toggle on its own row #}
+  <div style="margin-bottom:10px">{% include "_angle_unit.html" %}</div>
+
+  <div class="viz-inputs" style="align-items:flex-start;gap:40px;flex-wrap:wrap">
+    <label>
+      <span style="display:block;white-space:nowrap">Force F (N)</span>
+      <span class="nc-field" style="display:block">
+        <input type="number" id="wd-force" value="10" step="any" style="width:120px">
+      </span>
+    </label>
+    <label>
+      <span style="display:block;white-space:nowrap">Distance d (m)</span>
+      <span class="nc-field" style="display:block">
+        <input type="number" id="wd-distance" value="5" step="any" style="width:120px">
+      </span>
+    </label>
+    <label>
+      <span style="display:block;white-space:nowrap">Angle &theta;
+        <span id="wd-unit-lbl" style="opacity:.7">(degrees)</span></span>
+      <span class="nc-field" style="display:block">
+        <input type="number" id="wd-angle" value="0" step="any" style="width:120px">
+      </span>
+    </label>
+  </div>
+
+  {# Interactive picture — ALWAYS visible #}
+  <canvas id="wd-canvas" width="640" height="360"
+          style="display:block;width:100%;height:auto;max-width:560px;margin:8px auto 0"></canvas>
+  <p class="viz-caption" id="wd-cap"
+     style="font-size:.9rem;margin-top:.5rem;opacity:.85;text-align:center"></p>
+
+  <p class="viz-law" id="wd-law"
+     style="font-size:.86rem;margin-top:.4rem;line-height:1.5;text-align:center"></p>
+
+  <div class="viz-out" id="viz-out" style="margin-top:10px"></div>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="wd-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+{# Three-way learning toggle — OUTSIDE the viz-panel box, above FAQ #}
+<div class="nc-learn3" id="wd-learn3" role="group" aria-label="Answer detail"
+     style="display:inline-flex;border-radius:8px;overflow:hidden;margin:12px 0 6px">
+  <button type="button" data-mode="direct" class="active" aria-pressed="true">Direct answer</button>
+  <button type="button" data-mode="steps" aria-pressed="false">Step-by-step working</button>
+  <button type="button" data-mode="anim" aria-pressed="false">Animation</button>
+</div>
+
+{# Animation controls (Play) — shown only in Animation mode #}
+<div id="wd-anim-controls" style="display:none;margin:2px 0 6px">
+  <button type="button" id="wd-play" style="cursor:pointer;border-radius:6px;padding:4px 12px">&#9654; Play</button>
+  <p id="wd-anim-note" style="font-size:.82rem;margin:6px 0 0;opacity:.8;max-width:560px"></p>
+</div>
+
+<script src="/static/ncangle.js"></script>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("wd-canvas"), ctx = cv.getContext("2d");
+  const SLUG = "{{ calc.slug }}";
+  let last = null;
+
+  function unit(){ return (window.NCAngle ? NCAngle.current() : "deg"); }
+  function S(){ return window.NCSkin || {}; }
+
+  function fmt(x){
+    if(x===null||x===undefined||isNaN(x)) return "";
+    if(Math.abs(x-Math.round(x))<1e-9) return String(Math.round(x));
+    return (Math.round(x*10000)/10000).toString();
+  }
+
+  function renderLaw(d){
+    const el=$("wd-law"); if(!el) return;
+    if(!d || !d.law_statement){ el.innerHTML=""; return; }
+    const sk=window.NCSkin||{};
+    let html='<b>What this states:</b> '+d.law_statement;
+    if(d.law_source_url && d.law_source_name){
+      html+=' <a href="'+d.law_source_url+'" target="_blank" rel="noopener">'+d.law_source_name+'</a>';
+    }
+    el.innerHTML=html;
+    el.style.color=sk.inkSoft||"";
+    el.querySelectorAll("b").forEach(b=>{ b.style.color=sk.ink||""; });
+    el.querySelectorAll("a").forEach(a=>{ a.style.color=sk.accent||""; });
+  }
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="'+SLUG+'"]');
+    if(!panel||!window.NCSkin) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const n=$("wd-anim-note"); if(n) n.style.color=NCSkin.inkSoft;
+    const d=$("wd-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  function syncUnitLabels(){
+    $("wd-unit-lbl").textContent = (unit()==="rad") ? "(radians)" : "(degrees)";
+  }
+
+  async function update(){
+    const u = unit();
+    const aVal = parseFloat($("wd-angle").value);
+    const body = {
+      force: parseFloat($("wd-force").value),
+      distance: parseFloat($("wd-distance").value),
+      angle: aVal,
+      angle_unit: u
+    };
+    let data;
+    try{
+      const r=await fetch("/api/compute/"+SLUG,{method:"POST",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      data=await r.json();
+    }catch(e){ $("viz-out").textContent="compute error"; return; }
+
+    try{ if(window.NCSteps) NCSteps.render(data.steps||[]); }catch(e){}
+    if(data.disclaimer) $("wd-disc").textContent="\u26A0 "+data.disclaimer;
+    renderLaw(data);
+
+    if(data.error){
+      $("viz-out").innerHTML="<b>"+data.error+"</b>";
+      last=null; ctx.clearRect(0,0,cv.width,cv.height); return;
+    }
+    $("viz-out").innerHTML =
+      `<div style="line-height:1.7"><b>${data.result}</b></div>`+
+      `<div style="line-height:1.7;opacity:.85">cos&thinsp;&theta; = ${fmt(data.cos_theta)}</div>`;
+    try{ if(window.__ncExplain) __ncExplain(data.explanation); }catch(e){}
+
+    last = data;
+    draw(last, 1);
+  }
+
+  // draw(d, sweep): sweep in [0,1] grows the displacement arrow during animation.
+  function draw(d, sweep){
+    if(!window.NCSkin || !d){ ctx.clearRect(0,0,cv.width,cv.height); return; }
+    if(typeof sweep!=="number") sweep=1;
+    const sk=S();
+    const W=cv.width,H=cv.height;
+    const ink=sk.ink||"#222", soft=sk.inkSoft||"#888", acc=sk.accent||"#b34a23",
+          yes=sk.yes||"#2f7a52", rule=sk.rule||"#ddd";
+    ctx.clearRect(0,0,W,H);
+
+    const baseY=H*0.60, x0=100, fullLen=380;
+    const dispLen=fullLen*Math.max(0,Math.min(1,sweep));
+    const thetaDeg=(typeof d.angle_deg==="number")?d.angle_deg:0;
+    const rad=thetaDeg*Math.PI/180;
+
+    // ground line
+    ctx.strokeStyle=rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(40,baseY+34); ctx.lineTo(W-40,baseY+34); ctx.stroke();
+
+    // displacement arrow (horizontal)
+    ctx.strokeStyle=soft; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(x0,baseY); ctx.lineTo(x0+dispLen,baseY); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x0+dispLen,baseY);
+    ctx.lineTo(x0+dispLen-12,baseY-6);
+    ctx.lineTo(x0+dispLen-12,baseY+6);
+    ctx.closePath(); ctx.fillStyle=soft; ctx.fill();
+
+    // box being moved
+    const boxX=x0+dispLen-28;
+    ctx.fillStyle=sk.paper2||"#eee"; ctx.strokeStyle=ink; ctx.lineWidth=1.5;
+    ctx.fillRect(boxX,baseY-28,28,28); ctx.strokeRect(boxX,baseY-28,28,28);
+
+    // force vector at theta above the horizontal
+    const fLen=120;
+    const fx=x0+Math.cos(rad)*fLen, fy=baseY-Math.sin(rad)*fLen;
+    ctx.strokeStyle=acc; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(x0,baseY); ctx.lineTo(fx,fy); ctx.stroke();
+    const ah=Math.atan2(fy-baseY,fx-x0);
+    ctx.beginPath();
+    ctx.moveTo(fx,fy);
+    ctx.lineTo(fx-12*Math.cos(ah-0.4),fy-12*Math.sin(ah-0.4));
+    ctx.lineTo(fx-12*Math.cos(ah+0.4),fy-12*Math.sin(ah+0.4));
+    ctx.closePath(); ctx.fillStyle=acc; ctx.fill();
+
+    // angle arc
+    if(Math.abs(thetaDeg)>0.5){
+      ctx.strokeStyle=yes; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.arc(x0,baseY,40,0,-rad,true); ctx.stroke();
+    }
+
+    // numbers on the graph
+    ctx.fillStyle=ink; ctx.font="14px "+(sk.sans||"sans-serif"); ctx.textAlign="left";
+    ctx.fillText("F = "+fmt(d.force)+" N", fx+8, fy-2);
+    ctx.fillStyle=soft; ctx.textAlign="center";
+    ctx.fillText("d = "+fmt(d.distance)+" m", x0+fullLen/2, baseY+24);
+    ctx.fillStyle=yes; ctx.textAlign="left";
+    if(Math.abs(thetaDeg)>0.5) ctx.fillText("\u03B8 = "+fmt(thetaDeg)+"\u00B0", x0+46, baseY-16);
+
+    // top-left readout
+    ctx.fillStyle=acc; ctx.font="14px "+(sk.mono||"monospace"); ctx.textAlign="left";
+    ctx.fillText("W = F d cos\u03B8", 14, 24);
+    ctx.fillStyle=ink;
+    ctx.fillText("W = "+fmt(d.work)+" J", 14, 44);
+    ctx.fillStyle=soft;
+    ctx.fillText("cos\u03B8 = "+fmt(d.cos_theta), 14, 62);
+
+    const u=unit();
+    const angLbl=(u==="rad")?(rad.toFixed(4)+" rad"):(fmt(thetaDeg)+"\u00B0");
+    $("wd-cap").textContent="\u03B8 = "+angLbl+" \u00B7 only the component of force along the movement does work";
+  }
+
+  // ---- Three-way mode toggle: direct | steps | anim ----
+  let mode="direct", raf=null, playing=false, animStart=null;
+  const DURATION=3600;
+  const ANIM_NOTE="The box is pushed through the displacement d while the force F acts at "+
+    "angle \u03B8. Only the component F cos\u03B8 along the movement does work, so the work "+
+    "accumulates as the box advances.";
+
+  function stepsPanel(){ return document.getElementById("nc-steps"); }
+
+  function styleToggle(){
+    if(!window.NCSkin) return;
+    const seg=$("wd-learn3");
+    seg.style.border="1px solid "+NCSkin.rule;
+    seg.querySelectorAll("button").forEach(b=>{
+      const on=b.classList.contains("active");
+      b.style.cursor="pointer"; b.style.border="none"; b.style.padding="6px 14px";
+      b.style.font="13px "+(NCSkin.sans||"sans-serif");
+      b.style.background = on ? NCSkin.accent : (NCSkin.paper2||"transparent");
+      b.style.color = on ? (NCSkin.paper||"#fff") : NCSkin.ink;
+    });
+    const pb=$("wd-play");
+    if(pb){ pb.style.border="1px solid "+NCSkin.rule; pb.style.background=NCSkin.paper2||"transparent"; pb.style.color=NCSkin.ink; }
+  }
+
+  function stopPlay(){
+    if(raf){ cancelAnimationFrame(raf); raf=null; }
+    playing=false; animStart=null;
+    const pb=$("wd-play"); if(pb) pb.textContent="\u25B6 Play";
+    if(last) draw(last, 1);
+  }
+  function startPlay(){
+    if(raf||!last) return; playing=true;
+    const pb=$("wd-play"); if(pb) pb.textContent="\u23F8 Pause";
+    function frame(ts){
+      if(animStart===null) animStart=ts;
+      let t=(ts-animStart)/DURATION;
+      if(t>=1){ t=1; }
+      draw(last, t);
+      if(t<1){ raf=requestAnimationFrame(frame); }
+      else { raf=null; playing=false; const b=$("wd-play"); if(b)b.textContent="\u25B6 Play"; }
+    }
+    raf=requestAnimationFrame(frame);
+  }
+  function togglePlay(){ if(playing) stopPlay(); else startPlay(); }
+
+  function setMode(m){
+    mode=m; stopPlay();
+    const seg=$("wd-learn3");
+    seg.querySelectorAll("button").forEach(b=>{
+      const on=b.getAttribute("data-mode")===m;
+      b.classList.toggle("active",on); b.setAttribute("aria-pressed",String(on));
+    });
+    const sp=stepsPanel(), animCtl=$("wd-anim-controls");
+    if(sp) sp.style.display = (m==="steps") ? "" : "none";
+    if(m==="steps" && sp){
+      sp.hidden=false; sp.style.display="";
+      const wbtn=document.getElementById("nc-steps-working");
+      if(wbtn) wbtn.click();
+    }
+    animCtl.style.display = (m==="anim") ? "" : "none";
+    if(m==="anim") $("wd-anim-note").textContent = ANIM_NOTE;
+    draw(last, 1);
+    styleToggle();
+  }
+
+  $("wd-learn3").querySelectorAll("button").forEach(b=>{
+    b.addEventListener("click", ()=>setMode(b.getAttribute("data-mode")));
+  });
+  $("wd-play").addEventListener("click", togglePlay);
+
+  // ---- live interactivity ----
+  ["wd-force","wd-distance","wd-angle"].forEach(id=>{
+    const el=$(id); if(el) el.addEventListener("input", ()=>{ if(mode==="anim") setMode("anim"); update(); });
+  });
+
+  if(window.NCAngle){
+    NCAngle.onChange(function(){ syncUnitLabels(); update(); });
+  }
+
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", styleToggle);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) renderLaw(last); });
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last, 1); });
+
+  styleFields(); syncUnitLabels();
+  update().then(()=>{
+    const innerToggle=document.querySelector("#nc-steps .nc-steps-toggle");
+    if(innerToggle) innerToggle.style.display="none";
+    setMode("direct");
+  });
+})();
+</script>

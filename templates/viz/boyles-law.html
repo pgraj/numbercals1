@@ -1,0 +1,497 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+
+  <div class="viz-inputs" style="align-items:flex-start;gap:24px;flex-wrap:wrap">
+    <label>
+      <span style="display:block;white-space:nowrap">Solve for</span>
+      <span class="nc-field" style="display:block">
+        <select id="bo-solve" style="width:130px">
+          <option value="p2" selected>P&#8322; (final pressure)</option>
+          <option value="v2">V&#8322; (final volume)</option>
+          <option value="p1">P&#8321; (initial pressure)</option>
+          <option value="v1">V&#8321; (initial volume)</option>
+        </select>
+      </span>
+    </label>
+    <label id="bo-l-p1">
+      <span style="display:block;white-space:nowrap">P&#8321; (Pa)</span>
+      <span class="nc-field" style="display:block">
+        <input type="number" id="bo-p1" value="100000" step="any" style="width:120px">
+      </span>
+    </label>
+    <label id="bo-l-v1">
+      <span style="display:block;white-space:nowrap">V&#8321;</span>
+      <span class="nc-field" style="display:block">
+        <input type="number" id="bo-v1" value="2" step="any" style="width:120px">
+      </span>
+    </label>
+    <label id="bo-l-p2" style="display:none">
+      <span style="display:block;white-space:nowrap">P&#8322; (Pa)</span>
+      <span class="nc-field" style="display:block">
+        <input type="number" id="bo-p2" value="200000" step="any" style="width:120px">
+      </span>
+    </label>
+    <label id="bo-l-v2">
+      <span style="display:block;white-space:nowrap">V&#8322;</span>
+      <span class="nc-field" style="display:block">
+        <input type="number" id="bo-v2" value="1" step="any" style="width:120px">
+      </span>
+    </label>
+    <label>
+      <span style="display:block;white-space:nowrap">Container</span>
+      <span class="nc-field" style="display:block">
+        <select id="bo-container" style="width:170px">
+          <option value="none" selected>No limit</option>
+          <option value="balloon">Balloon (~150 kPa)</option>
+          <option value="syringe">Syringe (~500 kPa)</option>
+          <option value="steel">Steel (~20 MPa)</option>
+        </select>
+      </span>
+    </label>
+  </div>
+
+  <canvas id="bo-canvas" width="640" height="340"
+          style="display:block;width:100%;height:auto;max-width:600px;margin:8px auto 0"></canvas>
+  <p class="viz-caption" id="bo-cap"
+     style="font-size:.9rem;margin-top:.5rem;opacity:.85;text-align:center"></p>
+
+  <p class="viz-law" id="bo-law"
+     style="font-size:.86rem;margin-top:.4rem;line-height:1.5;text-align:center"></p>
+
+  <div id="bo-weight" style="margin-top:6px;font-size:.92rem;text-align:center"></div>
+
+  <div class="viz-out" id="viz-out" style="margin-top:10px"></div>
+  <div id="bo-burst" style="margin-top:8px;font-size:.9rem"></div>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="bo-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<div class="nc-learn3" id="bo-learn3" role="group" aria-label="Answer detail"
+     style="display:inline-flex;border-radius:8px;overflow:hidden;margin:12px 0 6px">
+  <button type="button" data-mode="direct" class="active" aria-pressed="true">Direct answer</button>
+  <button type="button" data-mode="steps" aria-pressed="false">Step-by-step working</button>
+  <button type="button" data-mode="anim" aria-pressed="false">Animation</button>
+</div>
+
+<div id="bo-anim-controls" style="display:none;margin:2px 0 6px">
+  <button type="button" id="bo-play" style="cursor:pointer;border-radius:6px;padding:4px 12px">&#9654; Play</button>
+  <p id="bo-anim-note" style="font-size:.82rem;margin:6px 0 0;opacity:.8;max-width:600px"></p>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("bo-canvas"), ctx = cv.getContext("2d");
+  const SLUG = "{{ calc.slug }}";
+  let last = null;
+
+  function S(){ return window.NCSkin || {}; }
+  function fmt(x){
+    if(x===null||x===undefined||isNaN(x)) return "";
+    if(Math.abs(x-Math.round(x))<1e-9) return String(Math.round(x));
+    return (Math.round(x*10000)/10000).toString();
+  }
+
+  function renderLaw(d){
+    const el=$("bo-law"); if(!el) return;
+    if(!d || !d.law_statement){ el.innerHTML=""; return; }
+    const sk=window.NCSkin||{};
+    let html='<b>What this law states:</b> '+d.law_statement;
+    if(d.law_source_url && d.law_source_name){
+      html+=' <a href="'+d.law_source_url+'" target="_blank" rel="noopener">'+d.law_source_name+'</a>';
+    }
+    el.innerHTML=html;
+    el.style.color=sk.inkSoft||"";
+    el.querySelectorAll("b").forEach(b=>{ b.style.color=sk.ink||""; });
+    el.querySelectorAll("a").forEach(a=>{ a.style.color=sk.accent||""; });
+  }
+
+  function renderBurst(d){
+    const el=$("bo-burst"); if(!el) return;
+    if(!d || d.error || d.burst_exceeded===null || d.burst_exceeded===undefined){ el.innerHTML=""; return; }
+    const sk=window.NCSkin||{};
+    const burst=d.burst_exceeded;
+    el.innerHTML='<b>'+(burst?"\u26A0 Container would burst: ":"\u2713 Container holds: ")+'</b>'+(d.burst_note||"");
+    el.style.color=sk.inkSoft||"";
+    el.querySelectorAll("b").forEach(b=>{ b.style.color= burst ? (sk.accent||"") : (sk.yes||""); });
+  }
+
+  // Pressure -> relatable weight. Pressure is force per area (P = F/A); on a fixed
+  // palm-sized area the push equals a weight you can picture. mass = P*A / g.
+  const PALM_A = 0.01;   // 100 cm^2 (about a palm)
+  const G = 9.81;
+  const WEIGHT_ANCHORS = [
+    [0.2,"a small apple"], [1,"a bag of sugar"], [4,"a house cat"],
+    [12,"a car tyre"], [30,"a sack of cement"], [70,"an adult person"],
+    [150,"a washing machine"], [300,"a vending machine"], [1000,"a small car"],
+    [3000,"a rhino"], [5000,"an elephant"], [40000,"a loaded truck"],
+  ];
+  function anchorFor(kg){
+    let best=WEIGHT_ANCHORS[0][1];
+    for(const a of WEIGHT_ANCHORS){ if(kg>=a[0]) best=a[1]; }
+    return best;
+  }
+  function renderWeight(d){
+    const el=$("bo-weight"); if(!el) return;
+    const P=(d && typeof d.p2==="number")?d.p2:null;
+    if(P===null || isNaN(P)){ el.innerHTML=""; return; }
+    const sk=window.NCSkin||{};
+    const kg=(P*PALM_A)/G;
+    let kgTxt = kg>=10 ? Math.round(kg).toLocaleString() : (Math.round(kg*10)/10);
+    el.innerHTML='<b>In everyday terms:</b> this pressure on a palm-sized area (100 cm\u00b2) '+
+      'pushes like <b>'+kgTxt+' kg</b> \u2014 about the weight of '+anchorFor(kg)+'.';
+    el.style.color=sk.inkSoft||"";
+    el.querySelectorAll("b").forEach(b=>{ b.style.color=sk.ink||""; });
+  }
+
+  function styleFields(){
+    const panel = document.querySelector('.viz-panel[data-slug="'+SLUG+'"]');
+    if(!panel||!window.NCSkin) return;
+    const bg = NCSkin.paper2 || "transparent";
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const n=$("bo-anim-note"); if(n) n.style.color=NCSkin.inkSoft;
+    const d=$("bo-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  function syncFields(){
+    const sf=$("bo-solve").value;
+    $("bo-l-p1").style.display = (sf==="p1") ? "none" : "";
+    $("bo-l-v1").style.display = (sf==="v1") ? "none" : "";
+    $("bo-l-p2").style.display = (sf==="p2") ? "none" : "";
+    $("bo-l-v2").style.display = (sf==="v2") ? "none" : "";
+  }
+
+  function valOrNull(id){ const v=$(id).value; return (v===""||v===null)?null:parseFloat(v); }
+
+  // ---- gas particles (created once, positions persist for smooth motion) ----
+  const NPART = 26;
+  let parts = [];
+  function initParticles(){
+    parts = [];
+    for(let i=0;i<NPART;i++){
+      parts.push({ rx:Math.random(), ry:Math.random(),
+                   vx:(Math.random()*2-1), vy:(Math.random()*2-1) });
+    }
+  }
+  initParticles();
+  let collisionFlash = 0;  // brief wall-glow when many collisions
+
+  async function update(){
+    const body={ solve_for:$("bo-solve").value,
+                 p1:valOrNull("bo-p1"), v1:valOrNull("bo-v1"),
+                 p2:valOrNull("bo-p2"), v2:valOrNull("bo-v2"),
+                 container:$("bo-container").value };
+    let data;
+    try{
+      const r=await fetch("/api/compute/"+SLUG,{method:"POST",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      data=await r.json();
+    }catch(e){ $("viz-out").textContent="compute error"; return; }
+    try{ if(window.NCSteps) NCSteps.render(data.steps||[]); }catch(e){}
+    if(data.disclaimer) $("bo-disc").textContent="\u26A0 "+data.disclaimer;
+    renderLaw(data);
+    if(data.error){
+      $("viz-out").innerHTML="<b>"+data.error+"</b>"; $("bo-burst").innerHTML=""; $("bo-weight").innerHTML="";
+      last=null; ctx.clearRect(0,0,cv.width,cv.height); return;
+    }
+    $("viz-out").innerHTML=`<div style="line-height:1.7"><b>${data.result}</b></div>`;
+    renderBurst(data);
+    renderWeight(data);
+    try{ if(window.__ncExplain) __ncExplain(data.explanation); }catch(e){}
+    last=data; draw(last, 1);
+  }
+
+  // ---- gauge: draws a semicircular dial with a needle at fraction f (0..1) ----
+  function drawGauge(gx, gy, R, f, label, sk){
+    const ink=sk.ink||"#222", soft=sk.inkSoft||"#888", acc=sk.accent||"#b34a23", rule=sk.rule||"#ddd";
+    f=Math.max(0,Math.min(1,f));
+    // dial arc (180deg, left to right along the top)
+    ctx.strokeStyle=rule; ctx.lineWidth=8;
+    ctx.beginPath(); ctx.arc(gx,gy,R,Math.PI,2*Math.PI); ctx.stroke();
+    // coloured portion up to f
+    ctx.strokeStyle=acc; ctx.lineWidth=8;
+    ctx.beginPath(); ctx.arc(gx,gy,R,Math.PI,Math.PI+Math.PI*f); ctx.stroke();
+    // ticks
+    ctx.strokeStyle=soft; ctx.lineWidth=1.5;
+    for(let i=0;i<=5;i++){
+      const a=Math.PI+ (Math.PI*i/5);
+      ctx.beginPath();
+      ctx.moveTo(gx+Math.cos(a)*(R-12), gy+Math.sin(a)*(R-12));
+      ctx.lineTo(gx+Math.cos(a)*(R-4),  gy+Math.sin(a)*(R-4));
+      ctx.stroke();
+    }
+    // needle
+    const na=Math.PI+Math.PI*f;
+    ctx.strokeStyle=ink; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(gx,gy); ctx.lineTo(gx+Math.cos(na)*(R-10), gy+Math.sin(na)*(R-10)); ctx.stroke();
+    ctx.fillStyle=ink; ctx.beginPath(); ctx.arc(gx,gy,4,0,Math.PI*2); ctx.fill();
+    // label
+    ctx.fillStyle=soft; ctx.font="12px "+(sk.sans||"sans-serif"); ctx.textAlign="center";
+    ctx.fillText(label, gx, gy+18);
+  }
+
+  // draw(d, sweep): cylinder with bouncing particles; volume interpolates V1->V2.
+  // Smaller volume = denser packing + faster apparent collisions; gauge needle climbs.
+  function draw(d, sweep, animate){
+    if(!window.NCSkin || !d){ ctx.clearRect(0,0,cv.width,cv.height); return; }
+    if(typeof sweep!=="number") sweep=1;
+    const sk=S();
+    const W=cv.width,H=cv.height;
+    const ink=sk.ink||"#222", soft=sk.inkSoft||"#888", acc=sk.accent||"#b34a23",
+          yes=sk.yes||"#2f7a52", rule=sk.rule||"#ddd";
+    ctx.clearRect(0,0,W,H);
+    const frac=Math.max(0,Math.min(1,sweep));
+    const P1=d.p1,V1=d.v1,P2=d.p2,V2=d.v2;
+    const vmax=Math.max(V1||1,V2||1);
+    const vNow=(V1||0)+((V2||0)-(V1||0))*frac;
+    const pNow=(P1||0)+((P2||0)-(P1||0))*frac;
+    const burst=!!d.burst_exceeded;
+
+    // cylinder on the left, gauge on the right
+    const cylX=70, cylTop=40, cylW=190, cylBottom=H-50;
+    const cylH=cylBottom-cylTop;
+    const gasH=Math.max(24,Math.min(cylH-16, (vNow/vmax)*(cylH-16)));
+    const gasTop=cylBottom-gasH;
+    const innerX=cylX+4, innerW=cylW-8;
+
+    // cylinder walls
+    ctx.strokeStyle=ink; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(cylX,cylTop); ctx.lineTo(cylX,cylBottom);
+    ctx.lineTo(cylX+cylW,cylBottom); ctx.lineTo(cylX+cylW,cylTop); ctx.stroke();
+
+    // gas region tint
+    ctx.fillStyle=sk.paper2||"#eef";
+    ctx.fillRect(innerX,gasTop,innerW,cylBottom-gasTop-1);
+
+    // collision intensity rises as volume shrinks (relative to max volume)
+    const squeeze = 1 - (vNow/vmax);            // 0 (big) .. ~1 (small)
+    const speed = 0.6 + squeeze*2.4;            // particles move faster when squeezed
+    let wallHits = 0;
+
+    // advance + draw particles within the gas box
+    ctx.fillStyle=acc;
+    for(const p of parts){
+      if(animate){
+        p.rx += p.vx*0.012*speed;
+        p.ry += p.vy*0.012*speed;
+        if(p.rx<0){ p.rx=0; p.vx=Math.abs(p.vx); wallHits++; }
+        if(p.rx>1){ p.rx=1; p.vx=-Math.abs(p.vx); wallHits++; }
+        if(p.ry<0){ p.ry=0; p.vy=Math.abs(p.vy); wallHits++; }
+        if(p.ry>1){ p.ry=1; p.vy=-Math.abs(p.vy); wallHits++; }
+      }
+      const px=innerX+6 + p.rx*(innerW-12);
+      const py=gasTop+6 + p.ry*(gasH-12);
+      ctx.beginPath(); ctx.arc(px,py,3,0,Math.PI*2); ctx.fill();
+    }
+
+    // wall-collision glow: brighter when squeezed (more frequent hits)
+    if(animate && wallHits>0){ collisionFlash = Math.min(1, collisionFlash + wallHits*0.08); }
+    collisionFlash *= 0.90;
+    if(collisionFlash>0.02){
+      ctx.save();
+      ctx.globalAlpha = collisionFlash*0.5*(0.3+squeeze);
+      ctx.strokeStyle=acc; ctx.lineWidth=3;
+      ctx.strokeRect(innerX,gasTop,innerW,gasH);
+      ctx.restore();
+    }
+
+    // piston
+    ctx.fillStyle=soft;
+    ctx.fillRect(cylX-4,gasTop-12,cylW+8,12);
+    ctx.strokeStyle=acc; ctx.lineWidth=2.5; ctx.fillStyle=acc;
+    const rodTop=Math.max(16,gasTop-46);
+    ctx.beginPath(); ctx.moveTo(cylX+cylW/2,rodTop); ctx.lineTo(cylX+cylW/2,gasTop-12); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cylX+cylW/2,gasTop-12); ctx.lineTo(cylX+cylW/2-6,gasTop-22); ctx.lineTo(cylX+cylW/2+6,gasTop-22);
+    ctx.closePath(); ctx.fill();
+
+    // burst pop overlay
+    if(burst && frac>0.97){
+      ctx.save();
+      ctx.strokeStyle=acc; ctx.fillStyle=acc; ctx.lineWidth=3;
+      const bx=cylX+cylW/2, by=gasTop+gasH/2;
+      for(let i=0;i<10;i++){
+        const a=i*Math.PI/5;
+        const r1=18, r2=46;
+        ctx.beginPath();
+        ctx.moveTo(bx+Math.cos(a)*r1, by+Math.sin(a)*r1);
+        ctx.lineTo(bx+Math.cos(a)*r2, by+Math.sin(a)*r2);
+        ctx.stroke();
+      }
+      ctx.font="bold 17px "+(sk.sans||"sans-serif"); ctx.textAlign="center";
+      ctx.fillText("POP!", bx, by+6);
+      ctx.restore();
+    }
+
+    // pressure gauge on the right
+    const gx=W-150, gy=H*0.5, R=80;
+    // Full-scale is based on the ACTUAL pressures in play (so the needle always moves
+    // meaningfully), with a little headroom. The container's burst limit is shown as a
+    // separate red marker on the dial when it sits within range, so a strong container
+    // (e.g. steel) visibly shows the burst point is far above the working pressure.
+    const workingMax = Math.max(P1||1, P2||1);
+    const fullScale = workingMax * 1.25;
+    const needleFrac = fullScale>0 ? pNow/fullScale : 0;
+    drawGauge(gx, gy, R, needleFrac, "pressure gauge", sk);
+    // burst-limit marker on the dial (only if it falls on the visible scale)
+    if(d.burst_pressure){
+      const bf = d.burst_pressure/fullScale;
+      if(bf>=0 && bf<=1){
+        const ba=Math.PI+Math.PI*bf;
+        ctx.strokeStyle=acc; ctx.lineWidth=3;
+        ctx.beginPath();
+        ctx.moveTo(gx+Math.cos(ba)*(R-14), gy+Math.sin(ba)*(R-14));
+        ctx.lineTo(gx+Math.cos(ba)*(R+4),  gy+Math.sin(ba)*(R+4));
+        ctx.stroke();
+        ctx.fillStyle=acc; ctx.font="10px "+(sk.sans||"sans-serif"); ctx.textAlign="center";
+        ctx.fillText("burst", gx+Math.cos(ba)*(R+16), gy+Math.sin(ba)*(R+16)+3);
+      } else {
+        // burst limit is off the top of the scale -> the container is far stronger than
+        // the working pressure; say so plainly so it does not look like nothing happens.
+        ctx.fillStyle=soft; ctx.font="11px "+(sk.sans||"sans-serif"); ctx.textAlign="center";
+        ctx.fillText("burst limit far above", gx, gy-R-6);
+        ctx.fillText("this pressure", gx, gy-R+8);
+      }
+    }
+    // When P2 is capped at the burst limit, pin the readout at the cap and label it.
+    const capped = !!d.p2_capped;
+    ctx.fillStyle = capped ? acc : ink;
+    ctx.font="bold 14px "+(sk.mono||"monospace"); ctx.textAlign="center";
+    ctx.fillText(fmt(pNow)+" Pa", gx, gy+40);
+    if(capped){
+      ctx.fillStyle=acc; ctx.font="11px "+(sk.sans||"sans-serif");
+      ctx.fillText("capped at burst limit", gx, gy+56);
+      ctx.fillText("material breaks/deforms", gx, gy+70);
+    }
+
+    // labels under cylinder
+    ctx.fillStyle=ink; ctx.font="13px "+(sk.sans||"sans-serif"); ctx.textAlign="center";
+    ctx.fillText("volume \u2248 "+fmt(vNow), cylX+cylW/2, cylBottom+18);
+
+    // top-left readout
+    ctx.fillStyle=acc; ctx.font="14px "+(sk.mono||"monospace"); ctx.textAlign="left";
+    ctx.fillText("P\u2081V\u2081 = P\u2082V\u2082", 14, 22);
+    ctx.fillStyle=ink;
+    ctx.fillText("P\u2081V\u2081 = "+fmt((P1||0)*(V1||0)), 14, 40);
+
+    $("bo-cap").textContent = burst
+      ? "the pressure climbs past what the container can hold \u2014 POP"
+      : "smaller space \u2192 particles hit the walls more often \u2192 higher pressure";
+
+    return wallHits;
+  }
+
+  let mode="direct", raf=null, playing=false, animStart=null;
+  const DURATION=4200;
+  function animNote(){
+    if(last && last.burst_exceeded)
+      return "Watch the particles: as the piston squeezes the gas into a smaller space they "+
+             "strike the walls more often and harder, so the pressure gauge climbs \u2014 here it "+
+             "passes what the container can hold and it bursts.";
+    return "Watch the gas particles bounce. As the piston squeezes them into a smaller space "+
+           "they hit the walls more often, so the pressure gauge climbs. That is WHY squeezing a "+
+           "gas raises its pressure.";
+  }
+
+  function stepsPanel(){ return document.getElementById("nc-steps"); }
+  function styleToggle(){
+    if(!window.NCSkin) return;
+    const seg=$("bo-learn3"); seg.style.border="1px solid "+NCSkin.rule;
+    seg.querySelectorAll("button").forEach(b=>{
+      const on=b.classList.contains("active");
+      b.style.cursor="pointer"; b.style.border="none"; b.style.padding="6px 14px";
+      b.style.font="13px "+(NCSkin.sans||"sans-serif");
+      b.style.background = on ? NCSkin.accent : (NCSkin.paper2||"transparent");
+      b.style.color = on ? (NCSkin.paper||"#fff") : NCSkin.ink;
+    });
+    const pb=$("bo-play");
+    if(pb){ pb.style.border="1px solid "+NCSkin.rule; pb.style.background=NCSkin.paper2||"transparent"; pb.style.color=NCSkin.ink; }
+  }
+  function stopPlay(){
+    if(raf){ cancelAnimationFrame(raf); raf=null; }
+    playing=false; animStart=null;
+    const pb=$("bo-play"); if(pb) pb.textContent="\u25B6 Play";
+    if(last) draw(last,1,false);
+  }
+  function startPlay(){
+    if(raf||!last) return; playing=true;
+    const pb=$("bo-play"); if(pb) pb.textContent="\u23F8 Pause";
+    function frame(ts){
+      if(animStart===null) animStart=ts;
+      let t=(ts-animStart)/DURATION; if(t>=1) t=1;
+      draw(last,t,true);   // animate=true keeps particles bouncing
+      if(t<1){ raf=requestAnimationFrame(frame); }
+      else {
+        // hold the final compressed state but keep particles jittering so it stays lively
+        function idle(){ if(!playing) return; draw(last,1,true); raf=requestAnimationFrame(idle); }
+        raf=requestAnimationFrame(idle);
+      }
+    }
+    raf=requestAnimationFrame(frame);
+  }
+  function togglePlay(){ if(playing) stopPlay(); else startPlay(); }
+
+  function setMode(m){
+    mode=m; stopPlay();
+    const seg=$("bo-learn3");
+    seg.querySelectorAll("button").forEach(b=>{
+      const on=b.getAttribute("data-mode")===m;
+      b.classList.toggle("active",on); b.setAttribute("aria-pressed",String(on));
+    });
+    const sp=stepsPanel(), animCtl=$("bo-anim-controls");
+    if(sp) sp.style.display=(m==="steps")?"":"none";
+    if(m==="steps" && sp){ sp.hidden=false; sp.style.display="";
+      const wbtn=document.getElementById("nc-steps-working"); if(wbtn) wbtn.click(); }
+    animCtl.style.display=(m==="anim")?"":"none";
+    if(m==="anim") $("bo-anim-note").textContent=animNote();
+    draw(last,1,false); styleToggle();
+  }
+
+  $("bo-learn3").querySelectorAll("button").forEach(b=>{
+    b.addEventListener("click", ()=>setMode(b.getAttribute("data-mode")));
+  });
+  $("bo-play").addEventListener("click", togglePlay);
+
+  $("bo-solve").addEventListener("change", ()=>{ syncFields(); if(mode==="anim") setMode("anim"); update(); });
+  $("bo-container").addEventListener("change", ()=>{ if(mode==="anim") setMode("anim"); update(); });
+  ["bo-p1","bo-v1","bo-p2","bo-v2"].forEach(id=>{
+    const el=$(id); if(el) el.addEventListener("input", ()=>{ if(mode==="anim") setMode("anim"); update(); });
+  });
+
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", styleToggle);
+  window.addEventListener("nc-theme-change", ()=>{ if(last){ renderLaw(last); renderBurst(last); renderWeight(last); } });
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last,1,false); });
+
+  syncFields(); styleFields();
+  update().then(()=>{
+    const innerToggle=document.querySelector("#nc-steps .nc-steps-toggle");
+    if(innerToggle) innerToggle.style.display="none";
+    setMode("direct");
+  });
+})();
+</script>
