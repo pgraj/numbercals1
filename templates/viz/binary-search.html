@@ -1,0 +1,330 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+
+  <div class="viz-inputs" style="align-items:flex-start;gap:24px;flex-wrap:wrap">
+    <label style="flex:1 1 100%">
+      <span style="display:block;white-space:nowrap">Your numbers (comma-separated, any order)</span>
+      <span class="nc-field" style="display:block">
+        <input type="text" id="bs-array" value="38, 5, 72, 16, 2, 91, 23, 8, 56, 12" style="width:100%">
+      </span>
+    </label>
+    <label>
+      <span style="display:block;white-space:nowrap">Sort order</span>
+      <span class="nc-field" style="display:block">
+        <select id="bs-order" style="width:150px">
+          <option value="asc" selected>Ascending</option>
+          <option value="desc">Descending</option>
+        </select>
+      </span>
+    </label>
+    <label>
+      <span style="display:block;white-space:nowrap">Target</span>
+      <span class="nc-field" style="display:block">
+        <input type="number" id="bs-target" value="23" step="1" style="width:120px">
+      </span>
+    </label>
+    <label style="align-self:flex-end">
+      <span style="display:block">&nbsp;</span>
+      <span class="nc-field" style="display:block">
+        <button type="button" id="bs-run" style="cursor:pointer;border-radius:6px;padding:5px 16px;font-weight:600">Sort &amp; search</button>
+      </span>
+    </label>
+  </div>
+
+  <div id="bs-stage-label" style="text-align:center;font-weight:600;margin:10px 0 2px;font-size:.9rem"></div>
+  <canvas id="bs-canvas" width="900" height="300"
+          style="display:block;width:100%;height:auto;max-width:820px;margin:4px auto 0"></canvas>
+  <p class="viz-caption" id="bs-cap"
+     style="font-size:.9rem;margin-top:.5rem;opacity:.85;text-align:center"></p>
+
+  <p class="viz-law" id="bs-law"
+     style="font-size:.86rem;margin-top:.4rem;line-height:1.5;text-align:center"></p>
+
+  <div class="viz-out" id="viz-out" style="margin-top:10px"></div>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="bs-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<div class="nc-learn3" id="bs-learn3" role="group" aria-label="Answer detail"
+     style="display:inline-flex;border-radius:8px;overflow:hidden;margin:12px 0 6px">
+  <button type="button" data-mode="direct" class="active" aria-pressed="true">Direct answer</button>
+  <button type="button" data-mode="steps" aria-pressed="false">Step-by-step working</button>
+  <button type="button" data-mode="anim" aria-pressed="false">Animation</button>
+</div>
+
+
+<div id="bs-algo-wrap" style="display:none;margin:8px 0">
+  <div id="bs-algo-tabs" style="display:inline-flex;border-radius:6px;overflow:hidden;margin-bottom:6px">
+    <button type="button" data-tab="pseudocode" class="active" style="cursor:pointer;border:none;padding:4px 12px;font-size:12px">Pseudocode</button>
+    <button type="button" data-tab="python" style="cursor:pointer;border:none;padding:4px 12px;font-size:12px">Python</button>
+  </div>
+  <pre id="bs-algo" style="margin:0;padding:10px 12px;border-radius:8px;font-size:13px;line-height:1.6;overflow-x:auto"></pre>
+</div>
+
+<div id="bs-anim-controls" style="display:none;margin:2px 0 6px">
+  <button type="button" id="bs-play" style="cursor:pointer;border-radius:6px;padding:4px 12px">&#9654; Play</button>
+  <button type="button" id="bs-stepbtn" style="cursor:pointer;border-radius:6px;padding:4px 12px;margin-left:6px">Step &#9656;</button>
+  <button type="button" id="bs-nowsearch" style="cursor:pointer;border-radius:6px;padding:4px 12px;margin-left:6px;font-weight:600;display:none">Now search &#9656;</button>
+  <span id="bs-frameinfo" style="font-size:.82rem;margin-left:10px;opacity:.8"></span>
+  <p id="bs-anim-note" style="font-size:.82rem;margin:6px 0 0;opacity:.8;max-width:760px"></p>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("bs-canvas"), ctx = cv.getContext("2d");
+  const SLUG = "{{ calc.slug }}";
+  let last=null;
+  let stage="sort", sortMoves=[], searchFrames=[], fi=0, raf=null, playing=false;
+
+  function S(){ return window.NCSkin || {}; }
+
+  function renderLaw(d){
+    const el=$("bs-law"); if(!el) return;
+    if(!d || !d.law_statement){ el.innerHTML=""; return; }
+    const sk=window.NCSkin||{};
+    let html='<b>What this states:</b> '+d.law_statement;
+    if(d.law_source_url && d.law_source_name){ html+=' <a href="'+d.law_source_url+'" target="_blank" rel="noopener">'+d.law_source_name+'</a>'; }
+    el.innerHTML=html; el.style.color=sk.inkSoft||"";
+    el.querySelectorAll("b").forEach(b=>{ b.style.color=sk.ink||""; });
+    el.querySelectorAll("a").forEach(a=>{ a.style.color=sk.accent||""; });
+  }
+
+  function styleFields(){
+    const panel=document.querySelector('.viz-panel[data-slug="'+SLUG+'"]');
+    if(!panel||!window.NCSkin) return;
+    const bg=NCSkin.paper2||"transparent";
+    panel.querySelectorAll("input, select, button").forEach(el=>{
+      el.style.background=bg; el.style.color=NCSkin.ink;
+      el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="4px 6px";
+    });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const n=$("bs-anim-note"); if(n) n.style.color=NCSkin.inkSoft;
+    const d=$("bs-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+    const sl=$("bs-stage-label"); if(sl) sl.style.color=NCSkin.accent;
+  }
+
+  // ---------------- canvas drawing ----------------
+  function drawBars(arr, opts){
+    opts=opts||{};
+    const sk=S();
+    const ink=sk.ink||"#222", soft=sk.inkSoft||"#888", acc=sk.accent||"#b34a23",
+          yes=sk.yes||"#2e7d32", rule=sk.rule||"#ccc", mono=sk.mono||"monospace";
+    const W=cv.width,H=cv.height;
+    ctx.clearRect(0,0,W,H);
+    if(!arr||!arr.length) return;
+    const n=arr.length, pad=36, top=46, botH=72, gap=8;
+    const bw=(W-pad*2-gap*(n-1))/n, baseY=H-botH, maxV=Math.max.apply(null,arr);
+    for(let i=0;i<n;i++){
+      const x=pad+i*(bw+gap);
+      const h=22+(arr[i]/maxV)*(baseY-top-22), y=baseY-h;
+      let fill=rule, alpha=1;
+      if(stage==="sort"){
+        if(opts.done) fill=yes;
+        else if(opts.compare && (i===opts.compare[0]||i===opts.compare[1])) fill=opts.swap?acc:"#e0a300";
+        else fill=rule;
+      } else {
+        const inWin=(opts.lo<=i && i<=opts.hi);
+        alpha=inWin?1:0.28; fill=inWin?acc:rule;
+        if(i===opts.mid) fill=(opts.decided==="found")?yes:"#e0a300";
+      }
+      ctx.globalAlpha=alpha; ctx.fillStyle=fill; ctx.fillRect(x,y,bw,h); ctx.globalAlpha=1;
+      ctx.fillStyle=ink; ctx.font="600 13px "+mono; ctx.textAlign="center";
+      ctx.fillText(String(arr[i]), x+bw/2, y-7);
+      ctx.fillStyle=soft; ctx.font="10px "+mono;
+      ctx.fillText("["+i+"]", x+bw/2, baseY+16);
+    }
+    if(stage==="search" && opts.lo>=0){
+      function mk(ix,label,col){ if(ix<0||ix>=n)return; const x=pad+ix*(bw+gap)+bw/2;
+        ctx.fillStyle=col; ctx.font="700 11px "+mono; ctx.textAlign="center"; ctx.fillText(label,x,baseY+34); }
+      mk(opts.lo,"low",ink); mk(opts.hi,"high",ink); mk(opts.mid,"mid",acc);
+    }
+    ctx.fillStyle=ink; ctx.font="14px "+(sk.sans||"sans-serif"); ctx.textAlign="left";
+    ctx.fillText(opts.msg||"", pad, 26);
+  }
+
+  function renderFrame(){
+    if(!last) return;
+    if(stage==="sort"){
+      const mv=sortMoves[fi]||{snapshot:last.sorted_array,i:-1};
+      const arr=mv.snapshot||last.sorted_array, done=(mv.i===-1);
+      const msg = done ? ("Sorted "+last.order+". Press Now search.")
+        : ("Compare arr["+mv.i+"] & arr["+mv.j+"]"+(mv.swap?" \u2192 swap":" \u2192 keep"));
+      drawBars(arr,{compare:done?null:[mv.i,mv.j],swap:mv.swap,done:done,msg:msg});
+      $("bs-frameinfo").textContent="Sort move "+(fi+1)+" / "+sortMoves.length;
+      $("bs-stage-label").textContent="Stage 1 \u2014 Sorting (bubble sort)";
+      if(done) $("bs-nowsearch").style.display="inline-block";
+    } else {
+      const fr=searchFrames[fi]||searchFrames[searchFrames.length-1];
+      const arr=last.sorted_array;
+      let msg="Searching for "+last.target;
+      if(fr.decided==="found") msg="Found "+last.target+" at index "+fr.mid;
+      else if(fr.decided==="absent") msg=last.target+" is not present";
+      else if(fr.decided==="right") msg="middle too "+(last.order==="ascending"?"small":"large")+" \u2192 go right";
+      else if(fr.decided==="left") msg="middle too "+(last.order==="ascending"?"large":"small")+" \u2192 go left";
+      else if(fr.mid>=0) msg="Compare middle arr["+fr.mid+"] = "+arr[fr.mid];
+      drawBars(arr,{lo:fr.lo,hi:fr.hi,mid:fr.mid,decided:fr.decided,msg:msg});
+      $("bs-frameinfo").textContent="Search step "+(fi+1)+" / "+searchFrames.length;
+      $("bs-stage-label").textContent="Stage 2 \u2014 Binary search";
+    }
+    renderAlgo(curAlgoLine());
+  }
+
+  // ---------------- compute ----------------
+  async function update(){
+    const arr=($("bs-array").value||"").split(",").map(t=>parseInt(t.trim(),10)).filter(v=>!isNaN(v));
+    const tgt=parseInt($("bs-target").value,10);
+    const order=$("bs-order").value;
+    let data;
+    try{
+      const r=await fetch("/api/compute/"+SLUG,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({array:arr,target:tgt,order:order})});
+      data=await r.json();
+    }catch(e){ $("viz-out").textContent="compute error"; return; }
+    try{ if(window.NCSteps) NCSteps.render(data.steps||[]); }catch(e){}
+    if(data.disclaimer) $("bs-disc").textContent="\u26A0 "+data.disclaimer;
+    renderLaw(data);
+    if(data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; last=null; ctx.clearRect(0,0,cv.width,cv.height); return; }
+    $("viz-out").innerHTML=`<div style="line-height:1.7"><b>${data.result}</b></div>`;
+    try{ if(window.__ncExplain) __ncExplain(data.explanation); }catch(e){}
+    last=data; sortMoves=data.sort_moves||[]; searchFrames=data.search_frames||[];
+    // reset animation to stage 1
+    stage="sort"; fi=0; $("bs-nowsearch").style.display="none";
+    if(mode==="anim"){ renderFrame(); } else { drawBars(last.sorted_array,{lo:0,hi:last.sorted_array.length-1,mid:-1,msg:"Sorted "+last.order}); stage="search"; $("bs-stage-label").textContent="Sorted & ready"; }
+  }
+
+  // ---------------- animation ----------------
+  function stop(){ if(raf){clearInterval(raf);raf=null;} playing=false; const b=$("bs-play"); if(b)b.textContent="\u25B6 Play"; }
+  function play(){
+    stop();
+    // continuous play: from wherever we are, run to the end of the sort, then
+    // automatically roll into the search, in one press.
+    if(stage==="sort" && fi>=sortMoves.length-1){ /* already sorted: jump to search */ stage="search"; fi=0; $("bs-nowsearch").style.display="none"; }
+    else { const frames=(stage==="sort")?sortMoves:searchFrames; if(fi>=frames.length-1) fi=0; }
+    playing=true; const b=$("bs-play"); if(b)b.textContent="\u23F8 Pause";
+    function tick(){
+      const frames=(stage==="sort")?sortMoves:searchFrames;
+      if(fi<frames.length-1){ fi++; renderFrame(); }
+      else if(stage==="sort"){
+        // sort finished -> seamlessly switch to the search and keep going
+        stage="search"; fi=0; $("bs-nowsearch").style.display="none"; renderFrame();
+      } else { stop(); }   // search finished
+    }
+    const speed=(stage==="sort")?420:760;
+    raf=setInterval(tick, speed);
+  }
+  function stepOne(){ stop(); const frames=(stage==="sort")?sortMoves:searchFrames; if(fi<frames.length-1){fi++;renderFrame();} }
+  function startSearch(){ stop(); stage="search"; fi=0; $("bs-nowsearch").style.display="none"; renderFrame(); }
+
+  const ANIM_NOTE="Stage 1 sorts your numbers \u2014 every compared pair highlights, and swaps when out of order. "+
+    "When sorting finishes press Now search: Stage 2 halves the live window (low\u2013high) each step until the target is found or ruled out.";
+
+  // ---------------- mode toggle (real template) ----------------
+  let mode="direct", algoTab="pseudocode";
+  function stepsPanel(){ return document.getElementById("nc-steps"); }
+  function styleToggle(){
+    if(!window.NCSkin) return;
+    const seg=$("bs-learn3"); seg.style.border="1px solid "+NCSkin.rule;
+    seg.querySelectorAll("button").forEach(b=>{
+      const on=b.classList.contains("active");
+      b.style.cursor="pointer"; b.style.border="none"; b.style.padding="6px 14px";
+      b.style.font="13px "+(NCSkin.sans||"sans-serif");
+      b.style.background = on ? NCSkin.accent : (NCSkin.paper2||"transparent");
+      b.style.color = on ? (NCSkin.paper||"#fff") : NCSkin.ink;
+    });
+    ["bs-play","bs-stepbtn","bs-nowsearch"].forEach(id=>{ const pb=$(id); if(pb){ pb.style.border="1px solid "+NCSkin.rule; pb.style.background=NCSkin.paper2||"transparent"; pb.style.color=NCSkin.ink; } });
+  }
+
+  function renderAlgo(activeLine){
+    const pre=$("bs-algo"); if(!pre||!last||!last.algorithm) return;
+    const sk=S();
+    const lines=(algoTab==="python")?last.algorithm.python:last.algorithm.pseudocode;
+    pre.style.background=sk.paper2||"transparent"; pre.style.color=sk.ink||"#222";
+    pre.style.border="1px solid "+(sk.rule||"#ddd"); pre.style.fontFamily=sk.mono||"monospace";
+    pre.innerHTML=lines.map((ln,idx)=>{
+      const on=(idx===activeLine);
+      const bg=on?(sk.accent||"#b34a23"):"transparent";
+      const fg=on?(sk.paper||"#fff"):(sk.ink||"#222");
+      const esc=ln.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      return '<span style="display:block;padding:1px 6px;border-radius:4px;background:'+bg+';color:'+fg+'">'+esc+'</span>';
+    }).join("");
+  }
+  function styleAlgoTabs(){
+    const sk=S(); const tabs=$("bs-algo-tabs"); if(!tabs) return;
+    tabs.style.border="1px solid "+(sk.rule||"#ddd");
+    tabs.querySelectorAll("button").forEach(b=>{
+      const on=b.classList.contains("active");
+      b.style.background=on?(sk.accent||"#b34a23"):(sk.paper2||"transparent");
+      b.style.color=on?(sk.paper||"#fff"):(sk.ink||"#222");
+    });
+  }
+  function curAlgoLine(){
+    if(stage==="sort") return 0;
+    const fr=(stage==="search")?(searchFrames[fi]||{}):{};
+    return (typeof fr.line==="number")?fr.line:-1;
+  }
+
+  function setMode(m){
+    mode=m; stop();
+    const seg=$("bs-learn3");
+    seg.querySelectorAll("button").forEach(b=>{ const on=b.getAttribute("data-mode")===m; b.classList.toggle("active",on); b.setAttribute("aria-pressed",String(on)); });
+    const sp=stepsPanel(), animCtl=$("bs-anim-controls"), algoWrap=$("bs-algo-wrap");
+    if(sp) sp.style.display=(m==="steps")?"":"none";
+    if(m==="steps" && sp){ sp.hidden=false; sp.style.display=""; const wbtn=document.getElementById("nc-steps-working"); if(wbtn) wbtn.click(); }
+    algoWrap.style.display=(m==="steps"||m==="anim")?"":"none";
+    if(m==="steps"){ renderAlgo(-1); styleAlgoTabs(); }
+    animCtl.style.display=(m==="anim")?"":"none";
+    if(m==="anim"){ $("bs-anim-note").textContent=ANIM_NOTE; stage="sort"; fi=0; $("bs-nowsearch").style.display="none"; renderFrame(); }
+    else if(last){ // direct: show the sorted-and-found result on the canvas, statically
+      stage="search"; const sf=searchFrames[searchFrames.length-1]||{lo:0,hi:last.sorted_array.length-1,mid:last.found_index,decided:last.found_index>=0?"found":"absent"};
+      drawBars(last.sorted_array,{lo:0,hi:last.sorted_array.length-1,mid:last.found_index,decided:last.found_index>=0?"found":"absent",msg:"Sorted "+last.order+" \u2014 "+(last.found_index>=0?("found at index "+last.found_index):"not present")});
+      $("bs-stage-label").textContent="Result";
+    }
+    styleToggle();
+  }
+
+  $("bs-learn3").querySelectorAll("button").forEach(b=>{ b.addEventListener("click", ()=>setMode(b.getAttribute("data-mode"))); });
+  $("bs-algo-tabs").querySelectorAll("button").forEach(b=>{ b.addEventListener("click", ()=>{
+    algoTab=b.getAttribute("data-tab");
+    $("bs-algo-tabs").querySelectorAll("button").forEach(x=>x.classList.toggle("active",x===b));
+    styleAlgoTabs(); renderAlgo(curAlgoLine());
+  }); });
+  $("bs-play").addEventListener("click", ()=>{ if(playing) stop(); else play(); });
+  $("bs-stepbtn").addEventListener("click", stepOne);
+  $("bs-nowsearch").addEventListener("click", startSearch);
+  $("bs-run").addEventListener("click", ()=>{ update().then(()=>{ if(mode==="anim") setMode("anim"); else setMode(mode); }); });
+
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", styleToggle);
+  window.addEventListener("nc-theme-change", styleAlgoTabs);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) renderAlgo(curAlgoLine()); });
+  window.addEventListener("nc-theme-change", ()=>{ if(last) renderLaw(last); });
+  window.addEventListener("nc-theme-change", ()=>{ if(last) renderFrame(); });
+
+  styleFields();
+  update().then(()=>{
+    const innerToggle=document.querySelector("#nc-steps .nc-steps-toggle");
+    if(innerToggle) innerToggle.style.display="none";
+    setMode("direct");
+  });
+})();
+</script>

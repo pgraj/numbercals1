@@ -1,0 +1,16 @@
+from core.faqs import register_faqs
+
+register_faqs('ida-star', [
+    {"q": "Is IDA* like solving a Rubik's Cube in my head with limited memory?",
+     "a": "Yes - that limited-memory part is the whole point. Solving a cube mentally, you try solutions up to 5 moves, then 6, then 7, deepening gradually rather than holding the entire move tree in your head. IDA* does this: repeated depth-first searches with a rising cost limit, keeping only the current path in memory. It reaches A*'s optimal answer using memory proportional to the solution depth, which is what makes huge puzzles solvable without running out of memory."},
+    {"q": 'What problem does IDA* solve that A* does not?',
+     "a": "Memory. A* keeps every generated node in memory (the open and closed sets), which on a huge search tree - like a Rubik's Cube with billions of states - simply will not fit. IDA* keeps only the nodes on the current path, so its memory grows with the depth of the solution, not the size of the tree. It achieves the same optimal answer as A* while using a tiny fraction of the memory, which is what makes hard puzzles solvable on ordinary hardware."},
+    {"q": 'How does the threshold work in IDA*?',
+     "a": "IDA* runs a series of depth-first searches, each with a ceiling on f = g + h. In a round, any node whose f exceeds the current threshold is abandoned immediately (and its f is noted). If the goal is not reached within the ceiling, the threshold is raised to the smallest f-value that was cut off in that round, and the whole search repeats. This gradually expands the explored region in cost order, mimicking A*'s ordering without storing the frontier."},
+    {"q": 'Does IDA* waste work by re-searching the same nodes each round?',
+     "a": 'Yes, it re-expands nodes from scratch every round, which is its main cost. But the waste is usually modest because the number of nodes grows quickly with depth - the final, deepest round dominates the total work, so earlier repeated rounds add only a fraction. In exchange for that repetition, you get enormous memory savings. It is a deliberate trade: spend a bit more time to use far less memory, which is the right trade when memory is the binding constraint.'},
+    {"q": 'Why does IDA* use depth-first search inside each round?',
+     "a": "Because depth-first search only needs to remember the current path - it goes deep, then backtracks, never holding a wide frontier. That is exactly the property that gives IDA* its low memory use. The f-threshold is what keeps this bounded depth-first search honest: without it, plain DFS could plunge down an expensive branch forever. The threshold turns DFS into a cost-limited search that still respects the heuristic, combining DFS's memory efficiency with A*'s optimality."},
+    {"q": 'Where is IDA* actually used?',
+     "a": "It is famous for solving combinatorial puzzles optimally: the 15-puzzle and Rubik's Cube solvers commonly use IDA* with strong heuristics (like pattern databases). It appears in embedded and memory-constrained systems that need optimal pathfinding without A*'s memory footprint, and in some planning and theorem-proving contexts. Whenever you need A*-quality optimal answers but cannot afford to store the whole frontier, IDA* is the classic solution."},
+])

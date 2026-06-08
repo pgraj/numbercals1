@@ -9,3 +9,5 @@ _removed-environment-backup/
 .DS_Store
 *.log
 "@ | Out-File -Encoding utf8 .gitignore
+__pycache__/
+*.pyc

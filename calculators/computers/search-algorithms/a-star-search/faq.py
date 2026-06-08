@@ -1,0 +1,16 @@
+from core.faqs import register_faqs
+
+register_faqs('a-star-search', [
+    {"q": 'Is A* what Google Maps uses to route me to college?',
+     "a": "It is the classic example. Maps does not explore every random side street equally - it heads generally toward your destination. A* adds a heuristic (like straight-line distance to the goal) to Dijkstra's cost-so-far, so it favours nodes that are both cheap to reach and pointing the right way. That goal-directed bias lets it find the optimal route while exploring far fewer roads than blind search, which is why it underpins map navigation and game pathfinding."},
+    {"q": 'What do g, h, and f mean in A*?',
+     "a": "g is the actual cost of the best path found so far from the start to a node. h is the heuristic - an estimate of the remaining cost from that node to the goal. f = g + h is the estimated total cost of a path through that node. A* always expands the node with the smallest f, which balances 'how much have I already spent' against 'how much more do I expect to spend.' That balance is what makes A* both directed (toward the goal) and optimal."},
+    {"q": "What makes a heuristic 'admissible' and why does it matter?",
+     "a": 'A heuristic is admissible if it never overestimates the true remaining cost to the goal. Straight-line distance is the classic example: a real road can only be as long or longer than the straight line, never shorter. Admissibility is what guarantees A* finds the optimal path - if h never overestimates, A* will not be fooled into finalising a node on a path that turns out to be suboptimal. An overestimating heuristic can make A* faster but may return a non-shortest path.'},
+    {"q": 'How is A* different from Dijkstra?',
+     "a": 'Dijkstra spreads outward from the start purely by cost, exploring equally in all directions until it happens to reach the goal. A* adds the heuristic h, which pulls the search toward the goal, so it wastes far less effort exploring away from the target. If you set h to zero everywhere, A* becomes exactly Dijkstra. So A* is Dijkstra with a sense of direction - same optimality guarantee (with an admissible h), usually much faster because it is goal-directed.'},
+    {"q": 'Can A* ever be slower or no better than Dijkstra?',
+     "a": 'Yes. If the heuristic provides little information - for example h is zero, or the goal is in an unexpected direction so the estimate is uninformative - A* degenerates toward Dijkstra and explores just as much. A* is only as good as its heuristic: a sharp, accurate estimate makes it laser-focused, while a weak one removes its advantage. The art of using A* is designing a heuristic that is both admissible and as close to the true remaining cost as possible.'},
+    {"q": 'Where is A* used in the real world?',
+     "a": 'It is the standard for maps and games. Navigation apps use it (often with refinements) to compute driving routes, using straight-line or landmark-based distance as the heuristic. Video games use it constantly for character and unit movement across tile grids. Robotics uses it for motion planning. Puzzle solvers use it with clever heuristics (like the number of misplaced tiles for sliding puzzles). Anywhere you need an optimal path and can estimate distance-to-goal, A* is the go-to algorithm.'},
+])

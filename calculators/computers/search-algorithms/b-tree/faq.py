@@ -1,0 +1,16 @@
+from core.faqs import register_faqs
+
+register_faqs('b-tree', [
+    {"q": 'Is a B-tree like a library catalog?',
+     "a": "Exactly like one. A catalog with broad section tabs - Science, then Physics, then Astronomy - gets you to the right shelf in just a few hops, instead of scanning every book. A B-tree's nodes are those fat tabs: each holds many keys and points to many children, so one lookup narrows the search enormously. Because each node maps to a disk page, very few reads reach any record, which is why B-trees are the backbone of databases and file systems."},
+    {"q": 'Why do databases use B-trees instead of binary search trees?',
+     "a": 'Because the bottleneck for a database is disk reads, not comparisons. A binary search tree of a billion keys is about 30 levels deep, meaning up to 30 separate disk reads - painfully slow. A B-tree packs hundreds of keys into each node, sized to match a disk page, so each read pulls in hundreds of keys at once and one read can choose among hundreds of children. That keeps the whole tree just three or four levels deep, so even a billion-key index is found in a handful of disk reads.'},
+    {"q": 'What is the difference between a B-tree and a B+ tree?',
+     "a": "In a plain B-tree, keys (and their data) live in both internal and leaf nodes. In a B+ tree, the internal nodes hold only separator keys for routing, and all the actual data lives in the leaves, which are also linked together in a chain. That chain makes range queries - 'all records between March and June' - very efficient: find the start leaf, then walk the linked leaves. This is why most databases and file systems specifically use B+ trees rather than basic B-trees."},
+    {"q": "What does the 'branching factor' or 'order' of a B-tree mean?",
+     "a": 'It is how many children each node can have - equivalently, how many keys fit in a node. A high branching factor (say 200) means each node read narrows the search 200-fold, so the tree is extremely shallow. The order is chosen so a node exactly fills a disk page or memory block, maximising the useful data per read. The demo uses a tiny order so the structure is visible, but real B-trees use orders in the hundreds.'},
+    {"q": 'How does a B-tree stay balanced as data is inserted?',
+     "a": 'When a node fills up, it splits in two and pushes its middle key up to the parent; if that fills the parent, the split cascades upward, and the tree only grows taller by splitting the root. Deletion works in reverse, merging or borrowing keys between sibling nodes when one gets too empty. These local split/merge operations keep every leaf at the same depth, so the tree is always perfectly height-balanced - a key reason its performance is so predictable.'},
+    {"q": 'Are B-trees used outside databases?',
+     "a": 'Yes, widely. File systems use them to index files and directories - NTFS (Windows), ext4 and Btrfs (Linux), HFS+ and APFS (Apple) all use B-tree variants to find files quickly on disk. They also appear in key-value stores and any system that must search large on-disk or SSD-resident data. Anywhere the data is too big for memory and read latency dominates, the fat, shallow B-tree is the structure of choice.'},
+])

@@ -1,0 +1,16 @@
+from core.faqs import register_faqs
+
+register_faqs('trie', [
+    {"q": "Is a trie what powers Google's 'neth...' suggestions?",
+     "a": "Yes. Typing 'neth' and instantly seeing 'Netherlands, Netflix, nether portal' is a trie at work: shared letters share a path down the tree, so once you have walked the 'n-e-t-h' path, every word below that point is a suggestion. Lookup cost depends only on how many letters you typed, not how many words exist, which is why suggestions appear instantly even over a giant dictionary."},
+    {"q": 'Why is trie lookup O(m) and not dependent on the number of words?',
+     "a": "Because searching a trie just walks one edge per character of the query, following the path that spells it out. A five-letter word takes five steps whether the trie holds ten words or ten million. The other words simply branch off elsewhere and are never touched. This is fundamentally different from a binary search tree or hash of whole words, where the cost relates to how many words are stored; the trie's cost relates only to the length of the word you are looking up."},
+    {"q": 'How does a trie make autocomplete so natural?',
+     "a": "Autocomplete is just 'find the node for the typed prefix, then list every word below it.' When you type 'ca', the trie walks the c-a path to a single node; everything in the subtree under that node is a word starting with 'ca' - cat, car, card, cards, care. Because the prefix is found in O(length-of-prefix) and the completions are sitting right there in the subtree, suggestions appear instantly as you type. That is why tries are the classic structure behind search-box suggestions."},
+    {"q": 'Why are tries described as memory-heavy?',
+     "a": 'Each node may need a slot or pointer for every possible next character - up to 26 for lowercase letters, more for full Unicode. Words that do not share prefixes create long chains of sparsely-used nodes, wasting space. A dictionary of unrelated words can use far more memory than just storing the strings. Variants like compressed tries (radix trees), which merge single-child chains into one edge, and ternary search tries reduce this overhead, trading some simplicity for much better memory use.'},
+    {"q": 'What is the difference between a word and a prefix in a trie?',
+     "a": "Every node represents a prefix - the string spelled from the root to that node. Only some nodes are also marked as complete words. For example, with 'do' and 'dot' stored, the node after 'd-o' is marked as a word (do), and the node after 'd-o-t' is also marked (dot). Typing 'do' lands on a word node; typing 'do' as a prefix also reveals 'dot' below it. The is_word flag is what distinguishes 'this is a real stored word' from 'this is just a step along the way.'"},
+    {"q": 'Where are tries used besides autocomplete and spell-check?',
+     "a": "IP routing tables use tries (specifically radix/Patricia tries) to match the longest network prefix of a destination address - the core of how routers forward packets. They power predictive text on phones, dictionary and scrabble solvers, and search engines' query suggestion. The Aho-Corasick multi-pattern matcher is built on a trie of all the patterns. Anywhere you need fast prefix queries over many strings, a trie or one of its compressed variants is a strong fit."},
+])

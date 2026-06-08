@@ -1,0 +1,16 @@
+from core.faqs import register_faqs
+
+register_faqs('greedy-best-first-search', [
+    {"q": 'Is greedy search like hiking toward a peak you can see?',
+     "a": 'Exactly - and the analogy also captures its weakness. You always step toward the visible peak, which is fast, but you might walk straight into a ravine you did not plan for. Greedy best-first always moves toward whatever looks closest to the goal, ignoring how much the journey has cost. That makes it quick but not guaranteed to find the cheapest route - if the heuristic misleads it, like the unseen ravine, it can take an expensive detour.'},
+    {"q": 'How is greedy best-first different from A*?',
+     "a": "Both use a heuristic h estimating distance to the goal, but greedy best-first uses h alone, while A* uses f = g + h. By ignoring g (the cost already spent), greedy search rushes toward whatever looks nearest to the goal, which is fast but can commit to an expensive route. A* balances the cost so far against the estimate, which is why A* finds the optimal path and greedy does not. Greedy trades A*'s optimality guarantee for raw speed."},
+    {"q": 'Why is greedy best-first not guaranteed to find the shortest path?',
+     "a": "Because it never looks back at how much a route has already cost. It might charge toward the goal through a series of expensive edges simply because each step looked closer to the target, when a slightly longer-looking detour would actually have been cheaper overall. By optimising only 'apparent closeness' and ignoring accumulated cost, it can lock onto a path that reaches the goal but at more total cost than necessary."},
+    {"q": 'When is greedy best-first a good choice despite not being optimal?',
+     "a": "When you need a reasonable path fast and a slightly suboptimal one is acceptable - many games and real-time systems prefer a quick 'good enough' route over a slower perfect one. It also shines when the heuristic is very accurate, so 'looks closest' almost always coincides with 'is closest.' And it uses less bookkeeping than A*. The key is knowing your application tolerates non-optimal answers in exchange for speed."},
+    {"q": 'What happens if the heuristic is misleading?',
+     "a": 'Greedy search can perform badly - even getting stuck heading into a dead end or taking a wildly long route - because it trusts the estimate completely. Imagine walking straight toward a visible mountain and hitting an impassable river: greedy keeps choosing the direction that looks closest and may thrash. A* is more robust here because its g term eventually penalises a route that has cost too much, pulling it back toward genuinely cheaper alternatives.'},
+    {"q": 'How do greedy, Dijkstra, and A* relate as a family?',
+     "a": "They differ only in what they minimise when picking the next node. Dijkstra minimises g (cost so far) and ignores the goal's direction - optimal but undirected. Greedy minimises h (estimate to goal) and ignores cost - directed but not optimal. A* minimises g + h, combining both - directed AND optimal (with an admissible heuristic). Seeing them side by side on the same graph makes the trade-offs concrete: each is the right tool when you value cost-blindness, speed, or both."},
+])

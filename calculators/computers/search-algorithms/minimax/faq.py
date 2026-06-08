@@ -1,0 +1,16 @@
+from core.faqs import register_faqs
+
+register_faqs('minimax', [
+    {"q": "Is minimax just how I'd think in tic-tac-toe?",
+     "a": "Precisely. You assume your opponent will always make their best move, and you pick the move that is safest against that perfect play. Minimax formalises this: at your turns it takes the best (maximum) outcome, and at the opponent's turns it assumes the worst-for-you (minimum) outcome, propagating these up the game tree. The move it picks gives the best result you can guarantee, so if the opponent ever plays less than perfectly, you only do better."},
+    {"q": 'Why does minimax assume the opponent plays perfectly?',
+     "a": 'Because it computes the best move you can guarantee regardless of what the opponent does. By assuming the opponent always makes the worst-for-you reply (the minimising choice), minimax finds the move whose worst case is as good as possible. If the real opponent plays worse than perfectly, you only do better than the guarantee - never worse. It is a safety-first principle: optimise your worst case, and any opponent mistake is a bonus.'},
+    {"q": 'How do values propagate up the game tree?',
+     "a": "From the leaves upward, alternating by whose turn it is. Leaf nodes have fixed outcome scores. At a MIN node (opponent's turn), the value is the minimum of its children - the opponent will choose the outcome worst for you. At a MAX node (your turn), the value is the maximum of its children - you choose the best available. The root is your turn, so its value is the best guaranteed score, and the child that produced it is your best move."},
+    {"q": "Why is minimax's cost O(b^d) and why is that a problem?",
+     "a": 'b is the branching factor (legal moves per turn) and d is the depth (how many turns ahead you look). Each level multiplies the number of nodes by b, so looking d turns ahead means b^d leaves. For chess, b is roughly 35 and looking just 4 turns ahead is already about a million and a half positions; deep search becomes astronomically expensive. This exponential blow-up is exactly why alpha-beta pruning - which skips provably irrelevant branches - is essential in practice.'},
+    {"q": 'What kinds of games is minimax suited to?',
+     "a": "Two-player, zero-sum, perfect-information, turn-based games: chess, checkers, tic-tac-toe, Connect Four, Othello. 'Zero-sum' means one player's gain is the other's loss, so a single score captures both viewpoints. 'Perfect information' means no hidden cards or dice - both players see the whole state. Games with chance or hidden information (poker, backgammon) need extensions like expectiminimax or entirely different approaches."},
+    {"q": 'How does minimax relate to alpha-beta pruning and MCTS?',
+     "a": 'Alpha-beta pruning computes exactly the same answer as minimax but skips branches it can prove cannot affect the result, often letting engines search twice as deep for the same effort. MCTS takes a different route entirely: instead of exhaustively evaluating the tree, it plays many random simulated games and favours moves that win most often, which works for games like Go where the tree is far too large for minimax even with pruning. Minimax is the foundational idea; the other two are responses to its exponential cost.'},
+])

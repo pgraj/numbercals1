@@ -1,0 +1,16 @@
+from core.faqs import register_faqs
+
+register_faqs('depth-first-search', [
+    {"q": 'Is DFS like exploring a video-game dungeon?',
+     "a": 'Exactly. You push forward through doors until you hit a dead end, then backtrack to the last junction and try another corridor. DFS does this with a stack (or recursion): it plunges down one path as far as it goes, then retreats to the most recent unexplored branch. That deep-first, backtracking style makes it ideal for fully exploring a maze, detecting cycles, or exhausting all possibilities - though, unlike BFS, it does not guarantee the shortest route out.'},
+    {"q": 'How does using a stack make DFS go deep instead of wide?',
+     "a": "A stack is last-in-first-out, so the most recently discovered node is the next one expanded. When DFS visits a node and pushes its neighbours, the very next step pops one of those neighbours and dives into it - rather than finishing the current node's siblings first. This drives the search down a single branch until it dead-ends, then it pops back to the most recent unexplored junction. Swap the stack for a queue and you get BFS; the container choice is the whole difference."},
+    {"q": 'Is DFS usually written with a stack or with recursion?',
+     "a": "Both are common and equivalent. Recursion is the most natural and concise: a function calls itself on each unvisited neighbour, and the program's call stack implicitly does the bookkeeping. An explicit stack is used when recursion depth could overflow (very deep graphs) or when you need fine control. They produce the same deep-first order; recursion just hides the stack inside the language runtime. The demo uses an explicit stack so you can see the frontier directly."},
+    {"q": 'Why does DFS not guarantee the shortest path?',
+     "a": 'Because it commits to a branch and follows it to the end before considering alternatives. It might reach the goal through a long, winding route simply because that branch happened to be explored first, even when a much shorter path existed down a different branch. DFS finds *a* path if one exists, but makes no promise about its length. When you need the fewest edges, use BFS (unweighted) or Dijkstra (weighted) instead.'},
+    {"q": 'What problems is DFS especially good at?',
+     "a": "Anything about structure rather than shortest distance: detecting cycles (if DFS revisits a node still on the current path, there's a cycle), topological sorting (ordering tasks so dependencies come first), finding connected components, identifying strongly connected components, solving mazes and puzzles, and exhaustively generating or exploring possibilities with backtracking. Its deep-first nature and low memory footprint (it only needs to remember the current path) make it ideal for these."},
+    {"q": "How does DFS's memory use compare to BFS?",
+     "a": "DFS typically uses less memory. It only needs to remember the nodes on the current path from the start plus the branch points, which is bounded by the depth of the graph. BFS must hold the entire current frontier - potentially a whole 'ring' of nodes - which in a wide graph can be enormous. So for very wide graphs DFS is more memory-friendly, while for very deep graphs BFS (or iterative deepening) may be safer. The right choice depends on the graph's shape and what you need to find."},
+])

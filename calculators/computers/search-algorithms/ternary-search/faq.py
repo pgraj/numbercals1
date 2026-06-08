@@ -1,0 +1,16 @@
+from core.faqs import register_faqs
+
+register_faqs('ternary-search', [
+    {"q": "Is ternary search like adjusting screen brightness to 'just right'?",
+     "a": "Yes - especially the optimisation flavour. Setting brightness to the comfortable level, you test a lower and a higher point, rule out the third that is clearly too dim or too bright, and keep narrowing. Ternary search uses two probe points to split the range into thirds and discards the part that cannot contain the answer. This 'find the just-right peak' behaviour is exactly what it is best at: locating the maximum or minimum of a single-humped (unimodal) function."},
+    {"q": 'If ternary search cuts more per step, why is it not faster than binary search?',
+     "a": 'Because it does more work per step. Binary search makes one comparison and halves the range - log base 2 of n steps. Ternary search makes up to two comparisons and cuts to a third - log base 3 of n steps. But log base 3 of n times two comparisons is actually more total comparisons than log base 2 of n times one. So for plain searching, binary search wins; cutting into more pieces does not help if each cut costs proportionally more comparisons.'},
+    {"q": 'Then what is ternary search actually good for?',
+     "a": "Its real home is optimization, not searching a sorted list. For a 'unimodal' function - one that rises to a single peak then falls (or falls to a single valley then rises) - ternary search finds the peak or valley. By comparing the function at two interior points, it can always tell which third cannot contain the extremum and discard it. This is used in optimization problems where you cannot take a derivative but the function has a single hump."},
+    {"q": "What does 'unimodal' mean and why does it matter here?",
+     "a": 'Unimodal means the data or function has a single high point (or single low point) with no other bumps - it goes strictly up then strictly down, like a hill. Ternary search relies on this: if the function were wavy with several peaks, comparing two points could not reliably tell which region to discard. Ordinary sorted data is a special case (monotonic), which is why ternary search can also do plain searching, just less efficiently than binary.'},
+    {"q": 'How are the two probe points chosen?',
+     "a": 'They split the current range into three roughly equal parts: m1 sits one third of the way from the low end, m2 two thirds of the way. Comparing the target (or function value) against both lets the algorithm decide whether the answer is in the first third, the last third, or the middle third, and discard the rest. Equal thirds keep the worst-case shrinkage balanced, just as the midpoint keeps binary search balanced.'},
+    {"q": 'Could you split into four or more parts instead of three?',
+     "a": "You could - it generalises to 'k-ary search' - but it rarely pays off for searching. More splits mean fewer iterations but more comparisons per iteration, and the comparison cost grows faster than the iteration count shrinks. Binary search's two-way split is the sweet spot for comparison-based searching. Multi-way splitting does become worthwhile when each 'probe' reads a whole block from disk, which is exactly the idea behind B-trees."},
+])

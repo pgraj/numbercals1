@@ -1,0 +1,16 @@
+from core.faqs import register_faqs
+
+register_faqs('hash-table-lookup', [
+    {"q": 'Is a hash table like a concert cloakroom ticket?',
+     "a": 'Exactly. You hand in your coat, get ticket #47, and at the end you walk straight to hook 47 - no searching through every coat. The ticket number is the hash: it is computed from your item and sends you directly to one location. That is why hash-table lookup is O(1) on average - you calculate where the thing is rather than searching for it, just like the cloakroom number tells you the exact hook.'},
+    {"q": 'How can a hash table find something in O(1) - constant time - regardless of size?',
+     "a": "Because it does not search at all; it calculates. The hash function turns the key into a bucket number directly, so the table jumps to that one bucket without examining any others. Whether the table holds ten items or ten million, computing the hash and going to that bucket takes the same small amount of time. That is what 'O(1) average' means: the work does not grow with the data, unlike linear search (O(n)) or even binary search (O(log n))."},
+    {"q": 'What is a collision, and why does it not ruin the O(1) promise?',
+     "a": "A collision is when two different keys hash to the same bucket - unavoidable once you have more keys than buckets. Hash tables handle it by storing a short list (a 'chain') in each bucket, or by probing nearby slots. As long as the table is sized so chains stay short on average, a lookup still only walks a handful of entries, keeping average time near O(1). Performance only collapses to O(n) in the rare case where almost everything piles into one bucket."},
+    {"q": 'What makes a good hash function?',
+     "a": 'Three things: it should be fast to compute, it should spread keys evenly across all buckets (so chains stay short), and similar keys should not clump together. The demo here uses a deliberately simple hash - the sum of character codes modulo the table size - which collides easily so you can see chaining. Real hash functions (like those behind Python dicts or Java HashMaps) mix the bits of the key thoroughly to scatter even very similar keys into different buckets.'},
+    {"q": 'Why do hash tables not keep their data in order?',
+     "a": "Because the bucket position is determined by the hash of the key, not by the key's value or insertion order. Two keys that are close alphabetically can land in completely different buckets. This is the price of O(1) lookup: you gain instant access by exact key but lose the ability to ask range questions like 'all keys between M and P' or 'the smallest key'. When you need ordered queries, a balanced tree or sorted array is the better structure."},
+    {"q": 'Where are hash tables used in everyday software?',
+     "a": "Almost everywhere. Every language's dictionary or map type (Python dict, JavaScript object/Map, Java HashMap) is a hash table. They power caches that remember recent results by key, database indexes for exact-match lookups, sets that test membership, symbol tables in compilers, and login systems that look you up by username. Whenever a program needs 'given this exact key, get the value fast,' a hash table is usually doing the work."},
+])

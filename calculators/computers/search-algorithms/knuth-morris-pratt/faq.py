@@ -1,0 +1,16 @@
+from core.faqs import register_faqs
+
+register_faqs('knuth-morris-pratt', [
+    {"q": 'Is KMP how Ctrl+F finds a phrase in my notes?',
+     "a": 'It is one of the classic ways. When you Ctrl+F a phrase, a good matcher never re-checks letters it already confirmed matched. KMP achieves this with a precomputed failure table: on a mismatch it slides the pattern forward intelligently without ever moving backward through the text it has already read. That no-backtracking property is what guarantees its linear speed, making it reliable for find-in-page and for scanning long, repetitive sequences like DNA.'},
+    {"q": 'What is the failure function (prefix table) in KMP?',
+     "a": 'It is a small array, one entry per pattern character, storing for each position the length of the longest proper prefix of the pattern that is also a suffix ending at that position. In plain terms: if you have matched the first j characters and then hit a mismatch, the table tells you the longest piece of what you have already matched that could still be the start of a new match. That lets the pattern slide forward by a useful amount instead of restarting from scratch.'},
+    {"q": 'Why does the text pointer never move backward in KMP?',
+     "a": 'Because the failure table captures everything KMP needs to know about the characters already matched. When a mismatch happens, naive matching throws away the partial match and re-examines text characters it already looked at. KMP instead consults the table to realign the pattern, knowing exactly how much of the previous match still applies. Since the text index only ever moves forward, each text character is examined at most a constant number of times, giving linear O(n) scanning.'},
+    {"q": 'How is KMP faster than naive string matching?',
+     "a": "Naive matching, on a mismatch, shifts the pattern by just one position and re-compares from the start, which can re-examine the same text characters many times - O(n*m) in the worst case. KMP never re-examines text it has passed and shifts the pattern by a smart amount from the failure table, achieving O(n + m). The gain is largest on patterns with repeated sub-structure (like 'ababc'), where naive matching wastes the most effort redoing comparisons."},
+    {"q": 'When is the failure table built, and does it cost much?',
+     "a": 'It is built once, before scanning the text, in O(m) time where m is the pattern length - and it uses the same prefix-matching idea applied to the pattern against itself. Since the pattern is usually far shorter than the text, this preprocessing is cheap and is dwarfed by the O(n) text scan. The table is then reused for the entire search (and for finding multiple occurrences), so its one-time cost is well amortised.'},
+    {"q": 'Where is KMP used in practice?',
+     "a": "It is a classic choice for exact single-pattern search in long texts: find-in-page, log scanning, and notably bioinformatics, where DNA and protein sequences are searched for specific motifs and the alphabet is small and repetitive - exactly where KMP's no-backtracking shines. That said, for general text search Boyer-Moore (which can skip ahead by more than one character) is often faster in practice; KMP's strength is its guaranteed linear worst case and its conceptual clarity, which also underpins more advanced matchers like Aho-Corasick."},
+])

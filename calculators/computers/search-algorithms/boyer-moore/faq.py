@@ -1,0 +1,16 @@
+from core.faqs import register_faqs
+
+register_faqs('boyer-moore', [
+    {"q": "Is Boyer-Moore like skimming a page for the word 'exam'?",
+     "a": "Exactly. Skimming for 'exam', you glance at chunks and leap past whole stretches that obviously cannot contain it. Boyer-Moore compares from the right end of the pattern and, on a mismatch, uses its bad-character rule to jump ahead - often by the whole pattern length when a character is not in the pattern at all. Skipping large chunks like this is why it can be sublinear (examining only a fraction of the text) and why it powers fast search tools like grep."},
+    {"q": 'Why does Boyer-Moore compare from the right end of the pattern?',
+     "a": 'Comparing right-to-left is what enables the big skips. If the rightmost pattern character lands on a text character that does not appear in the pattern at all, the whole pattern can jump past that position in one move - because no alignment overlapping it could match. Starting from the left would force you to discover mismatches one position at a time. By testing the end first, Boyer-Moore frequently learns it can leap forward by nearly the entire pattern length after a single comparison.'},
+    {"q": 'What is the bad-character rule?',
+     "a": "When a mismatch occurs at some text character c, the bad-character rule shifts the pattern so that the last occurrence of c in the pattern lines up with that text position. If c does not occur in the pattern at all, the pattern slides completely past it. This is the rule animated here, and it is the main source of Boyer-Moore's speed: a single mismatched character tells you a safe, often large, distance to jump."},
+    {"q": 'What is the good-suffix rule, and why have two rules?',
+     "a": 'The good-suffix rule handles the case where some characters at the end of the pattern DID match before the mismatch. It shifts the pattern so that the matched suffix lines up with another occurrence of that same suffix earlier in the pattern (or slides past if none exists). Boyer-Moore computes both the bad-character and good-suffix shifts on each mismatch and takes the larger, guaranteeing the biggest safe jump. Two rules cover two different reasons a shift can be safe.'},
+    {"q": 'How can Boyer-Moore be sublinear - faster than reading every character?',
+     "a": "Because it does not read every character. Thanks to the skips, on typical text it examines only a fraction of the characters - roughly n/m on average for a pattern of length m. The longer the pattern and the larger the alphabet, the bigger the average jump, so paradoxically searching for a longer word is often faster. This sublinear average behaviour is why Boyer-Moore and its variants power tools like grep and many editors' search functions."},
+    {"q": 'When might Boyer-Moore not be the best choice?',
+     "a": "Its worst case is O(n*m) (the basic bad-character-only version), which can show up with highly repetitive small-alphabet data, such as DNA, where jumps are tiny - there KMP's guaranteed linear time can be safer. For searching many patterns at once, Aho-Corasick is better. And for very short patterns the skip advantage shrinks. Boyer-Moore shines for single, longish patterns over large alphabets like ordinary text; the full Boyer-Moore (with the good-suffix rule) also has improved worst-case guarantees."},
+])

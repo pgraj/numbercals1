@@ -1,0 +1,229 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+
+  <div class="viz-inputs" style="align-items:flex-end;gap:18px;flex-wrap:wrap">
+    <label style="flex:1 1 100%"><span style="display:block">Values (we build a multiway B-tree)</span>
+      <span class="nc-field" style="display:block"><input type="text" id="b-tree-values" value="10,20,30,40,50,60,70,80,23,35,15,45" style="width:100%"></span></label>
+    <label><span style="display:block">Search for</span><span class="nc-field" style="display:block"><input type="number" id="b-tree-target" value="23" style="width:110px"></span></label>
+    <label style="align-self:flex-end">
+      <span style="display:block">&nbsp;</span>
+      <span class="nc-field" style="display:block">
+        <button type="button" id="b-tree-run" style="cursor:pointer;border-radius:6px;padding:6px 16px;font-weight:600">Run</button>
+      </span>
+    </label>
+  </div>
+
+  <canvas id="b-tree-canvas" width="820" height="360"
+          style="display:block;width:100%;height:auto;max-width:820px;margin:10px auto 0"></canvas>
+  <p class="viz-caption" id="b-tree-cap" style="font-size:.9rem;margin-top:.5rem;opacity:.85;text-align:center"></p>
+  <p class="viz-law" id="b-tree-law" style="font-size:.86rem;margin-top:.4rem;line-height:1.5;text-align:center"></p>
+  <div class="viz-out" id="viz-out" style="margin-top:10px"></div>
+  
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="b-tree-disc" style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<div class="nc-learn3" id="b-tree-learn3" role="group" aria-label="Answer detail"
+     style="display:inline-flex;border-radius:8px;overflow:hidden;margin:12px 0 6px">
+  <button type="button" data-mode="direct" class="active" aria-pressed="true">Direct answer</button>
+  <button type="button" data-mode="steps" aria-pressed="false">Step-by-step working</button>
+  <button type="button" data-mode="anim" aria-pressed="false">Animation</button>
+</div>
+
+<div id="b-tree-algo-wrap" style="display:none;margin:8px 0">
+  <div id="b-tree-algo-tabs" style="display:inline-flex;border-radius:6px;overflow:hidden;margin-bottom:6px">
+    <button type="button" data-tab="pseudocode" class="active" style="cursor:pointer;border:none;padding:4px 12px;font-size:12px">Pseudocode</button>
+    <button type="button" data-tab="python" style="cursor:pointer;border:none;padding:4px 12px;font-size:12px">Python</button>
+  </div>
+  <pre id="b-tree-algo" style="margin:0;padding:10px 12px;border-radius:8px;font-size:13px;line-height:1.6;overflow-x:auto"></pre>
+</div>
+
+<div id="b-tree-anim-controls" style="display:none;margin:2px 0 6px">
+  <button type="button" id="b-tree-play" style="cursor:pointer;border-radius:6px;padding:4px 12px">&#9654; Play</button>
+  <button type="button" id="b-tree-stepbtn" style="cursor:pointer;border-radius:6px;padding:4px 12px;margin-left:6px">Step &#9656;</button>
+  <button type="button" id="b-tree-reset" style="cursor:pointer;border-radius:6px;padding:4px 12px;margin-left:6px">Reset</button>
+  <span id="b-tree-frameinfo" style="font-size:.82rem;margin-left:10px;opacity:.8"></span>
+  <p id="b-tree-anim-note" style="font-size:.82rem;margin:6px 0 0;opacity:.8;max-width:820px"></p>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>'<div class="nc-explain-card"><div class="nc-explain-h">'+it.heading+'</div><p class="nc-explain-p">'+it.body+'</p></div>').join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const SLUG="{{ calc.slug }}";
+  const cv=$("b-tree-canvas"), ctx=cv.getContext("2d");
+  let last=null, frames=[], fi=0, raf=null, playing=false, mode="direct", algoTab="pseudocode";
+  function S(){ return window.NCSkin||{}; }
+
+  function renderLaw(d){
+    const el=$("b-tree-law"); if(!el) return;
+    if(!d||!d.law_statement){ el.innerHTML=""; return; }
+    const sk=S(); let html='<b>What this states:</b> '+d.law_statement;
+    if(d.law_source_url && d.law_source_name){ html+=' <a href="'+d.law_source_url+'" target="_blank" rel="noopener">'+d.law_source_name+'</a>'; }
+    el.innerHTML=html; el.style.color=sk.inkSoft||"";
+    el.querySelectorAll("b").forEach(b=>{b.style.color=sk.ink||"";});
+    el.querySelectorAll("a").forEach(a=>{a.style.color=sk.accent||"";});
+  }
+  function styleFields(){
+    const panel=document.querySelector('.viz-panel[data-slug="'+SLUG+'"]'); if(!panel||!window.NCSkin) return;
+    const bg=NCSkin.paper2||"transparent";
+    panel.querySelectorAll("input, select, button").forEach(el=>{ el.style.background=bg; el.style.color=NCSkin.ink; el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="5px 7px"; });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const n=$("b-tree-anim-note"); if(n) n.style.color=NCSkin.inkSoft;
+    const d=$("b-tree-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  // ---- per-algorithm frame builder ----
+  function buildFrames(){
+    frames=[];
+    if(!last) return;
+frames=last.frames||[];
+  }
+
+  // ---- per-algorithm canvas draw for the current frame ----
+  function draw(){
+    const sk=S();
+    const ink=sk.ink||"#222", soft=sk.inkSoft||"#888", acc=sk.accent||"#b34a23",
+          yes=sk.yes||"#2e7d32", warn="#e0a300", rule=sk.rule||"#ccc",
+          paper=sk.paper2||"#f4efe6", mono=sk.mono||"monospace", sans=sk.sans||"sans-serif";
+    const W=cv.width,H=cv.height;
+    ctx.clearRect(0,0,W,H);
+    const fr=frames[fi]||null;
+
+    if(!last||!last.leaves){ return; }
+    const seps=last.seps, leaves=last.leaves;
+    const pad=30, topY=80, leafY=200;
+    const child=fr?fr.child:-1, probe=fr?fr.probe:-1, level=fr?fr.level:"";
+    // root node (one fat box with separator keys)
+    const rootW=Math.min(W-pad*2, 60+seps.length*70), rootX=(W-rootW)/2;
+    const onRoot=(level==="root");
+    ctx.fillStyle=onRoot?acc:rule; ctx.globalAlpha=onRoot?0.25:0.12; ctx.fillRect(rootX,topY,rootW,40); ctx.globalAlpha=1;
+    ctx.strokeStyle=onRoot?acc:rule; ctx.lineWidth=onRoot?2:1; ctx.strokeRect(rootX,topY,rootW,40);
+    for(let s=0;s<seps.length;s++){ const cx=rootX+30+s*((rootW-60)/Math.max(1,seps.length-1||1)); 
+      ctx.fillStyle=ink; ctx.font="600 13px "+mono; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("<"+seps[s],cx, topY+20); }
+    ctx.fillStyle=soft; ctx.font="11px "+sans; ctx.textAlign="center"; ctx.fillText("root (separators)", W/2, topY-8);
+    // leaves
+    const lw=Math.min(150,(W-pad*2)/leaves.length - 10);
+    for(let i=0;i<leaves.length;i++){
+      const lx=pad+i*((W-pad*2)/leaves.length)+((W-pad*2)/leaves.length - lw)/2;
+      const isChild=(i===child);
+      ctx.strokeStyle=rule; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(W/2,topY+40); ctx.lineTo(lx+lw/2,leafY); ctx.stroke();
+      ctx.fillStyle=isChild?acc:rule; ctx.globalAlpha=isChild?0.2:0.1; ctx.fillRect(lx,leafY,lw,40); ctx.globalAlpha=1;
+      ctx.strokeStyle=isChild?acc:rule; ctx.lineWidth=isChild?2:1; ctx.strokeRect(lx,leafY,lw,40);
+      const keys=leaves[i];
+      for(let c=0;c<keys.length;c++){ const cx=lx+(lw/keys.length)*(c+0.5);
+        const isProbe=(isChild && level==="leaf" && c===probe);
+        if(isProbe){ ctx.fillStyle=(fr&&fr.line===3)?yes:warn; ctx.fillRect(lx+(lw/keys.length)*c+2,leafY+2,lw/keys.length-4,36); }
+        ctx.fillStyle=isProbe?paper:ink; ctx.font="600 12px "+mono; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(String(keys[c]),cx,leafY+20); }
+    }
+    ctx.fillStyle=ink; ctx.font="14px "+sans; ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+    ctx.fillText(fr&&fr.msg?fr.msg:("Search for "+last.target), pad, 40);
+    $("b-tree-cap").textContent="One read of the fat root picks a leaf; the leaf is then scanned. Few reads reach any key - ideal for disk.";
+
+    const info=$("b-tree-frameinfo"); if(info) info.textContent="Step "+(fi+1)+" / "+Math.max(1,frames.length);
+    if(mode==="anim" && fr && typeof fr.line==="number") renderAlgo(fr.line);
+  }
+
+  function stop(){ if(raf){clearInterval(raf);raf=null;} playing=false; const b=$("b-tree-play"); if(b)b.textContent="\u25B6 Play"; }
+  function play(){ stop(); if(fi>=frames.length-1) fi=0; playing=true; const b=$("b-tree-play"); if(b)b.textContent="\u23F8 Pause";
+    raf=setInterval(()=>{ if(fi<frames.length-1){fi++;draw();} else stop(); }, 850); }
+  function stepOne(){ stop(); if(fi<frames.length-1){fi++;draw();} }
+  function resetA(){ stop(); fi=0; draw(); }
+
+  function renderAlgo(activeLine){
+    const pre=$("b-tree-algo"); if(!pre||!last||!last.algorithm) return;
+    const sk=S(); const lines=(algoTab==="python")?last.algorithm.python:last.algorithm.pseudocode;
+    pre.style.background=sk.paper2||"transparent"; pre.style.color=sk.ink||"#222";
+    pre.style.border="1px solid "+(sk.rule||"#ddd"); pre.style.fontFamily=sk.mono||"monospace";
+    pre.innerHTML=lines.map((ln,idx)=>{ const on=(idx===activeLine);
+      const bg=on?(sk.accent||"#b34a23"):"transparent"; const fg=on?(sk.paper||"#fff"):(sk.ink||"#222");
+      const esc=ln.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      return '<span style="display:block;padding:1px 6px;border-radius:4px;background:'+bg+';color:'+fg+'">'+esc+'</span>';
+    }).join("");
+  }
+  function styleAlgoTabs(){
+    const sk=S(); const tabs=$("b-tree-algo-tabs"); if(!tabs) return;
+    tabs.style.border="1px solid "+(sk.rule||"#ddd");
+    tabs.querySelectorAll("button").forEach(b=>{ const on=b.classList.contains("active");
+      b.style.background=on?(sk.accent||"#b34a23"):(sk.paper2||"transparent"); b.style.color=on?(sk.paper||"#fff"):(sk.ink||"#222"); });
+  }
+
+  async function update(){
+    const body=collectInputs();
+    let data;
+    try{ const r=await fetch("/api/compute/"+SLUG,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $("viz-out").textContent="compute error"; return; }
+    try{ if(window.NCSteps) NCSteps.render(data.steps||[]); }catch(e){}
+    if(data.disclaimer) $("b-tree-disc").textContent="\u26A0 "+data.disclaimer;
+    renderLaw(data);
+    if(data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; last=null; ctx.clearRect(0,0,cv.width,cv.height); return; }
+    $("viz-out").innerHTML='<div style="line-height:1.7"><b>'+data.result+'</b></div>';
+    try{ if(window.__ncExplain) __ncExplain(data.explanation); }catch(e){}
+    last=data; buildFrames(); fi=(mode==="anim")?0:(frames.length?frames.length-1:0);
+    draw(); renderAlgo(-1); styleAlgoTabs();
+    if(typeof afterUpdate==="function") afterUpdate(data);
+  }
+
+  function stepsPanel(){ return document.getElementById("nc-steps"); }
+  function styleToggle(){
+    if(!window.NCSkin) return; const seg=$("b-tree-learn3"); seg.style.border="1px solid "+NCSkin.rule;
+    seg.querySelectorAll("button").forEach(b=>{ const on=b.classList.contains("active");
+      b.style.cursor="pointer"; b.style.border="none"; b.style.padding="6px 14px"; b.style.font="13px "+(NCSkin.sans||"sans-serif");
+      b.style.background=on?NCSkin.accent:(NCSkin.paper2||"transparent"); b.style.color=on?(NCSkin.paper||"#fff"):NCSkin.ink; });
+    ["b-tree-play","b-tree-stepbtn","b-tree-reset"].forEach(id=>{ const pb=$(id); if(pb){ pb.style.border="1px solid "+NCSkin.rule; pb.style.background=NCSkin.paper2||"transparent"; pb.style.color=NCSkin.ink; } });
+  }
+  const ANIM_NOTE="The root holds separator keys. One read of the root chooses which leaf could contain the target, then that single fat leaf is scanned. Because each node holds many keys, very few reads reach any record - the key advantage on disk.";
+  function setMode(m){
+    mode=m; stop();
+    const seg=$("b-tree-learn3");
+    seg.querySelectorAll("button").forEach(b=>{ const on=b.getAttribute("data-mode")===m; b.classList.toggle("active",on); b.setAttribute("aria-pressed",String(on)); });
+    const sp=stepsPanel(), animCtl=$("b-tree-anim-controls"), algoWrap=$("b-tree-algo-wrap");
+    if(sp) sp.style.display=(m==="steps")?"":"none";
+    if(m==="steps" && sp){ sp.hidden=false; sp.style.display=""; const wbtn=document.getElementById("nc-steps-working"); if(wbtn) wbtn.click(); }
+    algoWrap.style.display=(m==="steps"||m==="anim")?"":"none";
+    animCtl.style.display=(m==="anim")?"":"none";
+    if(m==="steps"){ renderAlgo(-1); styleAlgoTabs(); fi=frames.length?frames.length-1:0; draw(); }
+    if(m==="anim"){ $("b-tree-anim-note").textContent=ANIM_NOTE; fi=0; draw(); styleAlgoTabs(); }
+    if(m==="direct"){ fi=frames.length?frames.length-1:0; draw(); }
+    styleToggle();
+  }
+
+  $("b-tree-run").addEventListener("click", ()=>{ update().then(()=>setMode(mode)); });
+  $("b-tree-play").addEventListener("click", ()=>{ if(playing) stop(); else play(); });
+  $("b-tree-stepbtn").addEventListener("click", stepOne);
+  $("b-tree-reset").addEventListener("click", resetA);
+  $("b-tree-learn3").querySelectorAll("button").forEach(b=>{ b.addEventListener("click", ()=>setMode(b.getAttribute("data-mode"))); });
+  $("b-tree-algo-tabs").querySelectorAll("button").forEach(b=>{ b.addEventListener("click", ()=>{
+    algoTab=b.getAttribute("data-tab"); $("b-tree-algo-tabs").querySelectorAll("button").forEach(x=>x.classList.toggle("active",x===b));
+    styleAlgoTabs(); renderAlgo(mode==="anim"?((frames[fi]&&typeof frames[fi].line==="number")?frames[fi].line:-1):-1); }); });
+
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", styleToggle);
+  window.addEventListener("nc-theme-change", styleAlgoTabs);
+  window.addEventListener("nc-theme-change", ()=>{ if(last){ renderLaw(last); draw(); } });
+
+  styleFields();
+  update().then(()=>{ const it=document.querySelector("#nc-steps .nc-steps-toggle"); if(it) it.style.display="none"; setMode("direct"); });
+
+  // ---- per-algorithm input collection + optional afterUpdate ----
+  function collectInputs(){ var v=($("b-tree-values").value||"").split(",").map(t=>parseInt(t.trim(),10)).filter(x=>!isNaN(x)); return {values:v, target:parseInt($("b-tree-target").value,10)}; }
+  var afterUpdate=null;
+})();
+</script>

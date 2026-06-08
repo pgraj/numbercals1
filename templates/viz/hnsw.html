@@ -1,0 +1,370 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+
+  <div class="viz-inputs" style="align-items:flex-start;gap:24px;flex-wrap:wrap">
+    <label>
+      <span style="display:block;white-space:nowrap">How many documents?</span>
+      <span class="nc-field" style="display:block">
+        <select id="hnsw-count" style="width:90px">
+          <option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option>
+        </select>
+      </span>
+    </label>
+  </div>
+
+  <div id="hnsw-doc-fields" style="display:flex;flex-direction:column;gap:10px;margin:12px 0"></div>
+
+  <div class="viz-inputs" style="align-items:flex-end;gap:12px;flex-wrap:wrap">
+    <label style="flex:1 1 320px">
+      <span style="display:block;white-space:nowrap">Search word / phrase</span>
+      <span class="nc-field" style="display:block">
+        <input type="text" id="hnsw-query" maxlength="30" value="fresh" style="width:100%">
+      </span>
+    </label>
+    <label style="align-self:flex-end">
+      <span style="display:block">&nbsp;</span>
+      <span class="nc-field" style="display:block">
+        <button type="button" id="hnsw-run" style="cursor:pointer;border-radius:6px;padding:6px 18px;font-weight:600">Search documents</button>
+      </span>
+    </label>
+  </div>
+
+  <canvas id="hnsw-canvas" width="820" height="460"
+          style="display:block;width:100%;height:auto;max-width:820px;margin:10px auto 0"></canvas>
+  <p class="viz-caption" id="hnsw-cap"
+     style="font-size:.9rem;margin-top:.5rem;opacity:.85;text-align:center">Three stacked layers: sparse entry on top, dense base at the bottom. The glowing marker is your search word dropping layer to layer to the closest document.</p>
+
+  <p class="viz-law" id="hnsw-law"
+     style="font-size:.86rem;margin-top:.4rem;line-height:1.5;text-align:center"></p>
+
+  <div class="viz-out" id="viz-out" style="margin-top:10px"></div>
+  <div id="hnsw-ranking" style="margin:10px 0"></div>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="hnsw-disc"
+     style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<div class="nc-learn3" id="hnsw-learn3" role="group" aria-label="Answer detail"
+     style="display:inline-flex;border-radius:8px;overflow:hidden;margin:12px 0 6px">
+  <button type="button" data-mode="direct" class="active" aria-pressed="true">Direct answer</button>
+  <button type="button" data-mode="steps" aria-pressed="false">Step-by-step working</button>
+  <button type="button" data-mode="anim" aria-pressed="false">Animation</button>
+</div>
+
+<div id="hnsw-algo-wrap" style="display:none;margin:8px 0">
+  <div id="hnsw-algo-tabs" style="display:inline-flex;border-radius:6px;overflow:hidden;margin-bottom:6px">
+    <button type="button" data-tab="pseudocode" class="active" style="cursor:pointer;border:none;padding:4px 12px;font-size:12px">Pseudocode</button>
+    <button type="button" data-tab="python" style="cursor:pointer;border:none;padding:4px 12px;font-size:12px">Python</button>
+  </div>
+  <pre id="hnsw-algo" style="margin:0;padding:10px 12px;border-radius:8px;font-size:13px;line-height:1.6;overflow-x:auto"></pre>
+</div>
+
+<div id="hnsw-anim-controls" style="display:none;margin:2px 0 6px">
+  <button type="button" id="hnsw-play" style="cursor:pointer;border-radius:6px;padding:4px 12px">&#9654; Play descent</button>
+  <button type="button" id="hnsw-stepbtn" style="cursor:pointer;border-radius:6px;padding:4px 12px;margin-left:6px">Step &#9656;</button>
+  <button type="button" id="hnsw-reset" style="cursor:pointer;border-radius:6px;padding:4px 12px;margin-left:6px">Reset</button>
+  <span id="hnsw-frameinfo" style="font-size:.82rem;margin-left:10px;opacity:.8"></span>
+  <p id="hnsw-anim-note" style="font-size:.82rem;margin:6px 0 0;opacity:.8;max-width:820px"></p>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>`<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const SLUG="{{ calc.slug }}";
+  const cv=$("hnsw-canvas"), ctx=cv.getContext("2d");
+  const DEFAULTS=["the dog chased the cat","fresh pasta with tomato sauce","electric cars charge overnight","",""];
+  let last=null, layout=null, fi=0, playTimer=null, playing=false;
+  let mode="direct", algoTab="pseudocode";
+
+  function S(){ return window.NCSkin||{}; }
+
+  // ---------- inputs ----------
+  function renderDocFields(){
+    const n=parseInt($("hnsw-count").value,10);
+    const host=$("hnsw-doc-fields");
+    const keep={}; host.querySelectorAll("input").forEach(i=>keep[i.dataset.i]=i.value);
+    host.innerHTML="";
+    for(let i=0;i<n;i++){
+      const lab=document.createElement("label");
+      const span=document.createElement("span"); span.textContent="Document "+(i+1)+" (max 30 chars)"; span.style.display="block";
+      const fld=document.createElement("span"); fld.className="nc-field"; fld.style.display="block";
+      const inp=document.createElement("input"); inp.type="text"; inp.maxLength=30; inp.dataset.i=i; inp.style.width="100%";
+      inp.value=(keep[i]!==undefined)?keep[i]:(DEFAULTS[i]||"");
+      fld.appendChild(inp); lab.appendChild(span); lab.appendChild(fld); host.appendChild(lab);
+    }
+    styleFields();
+  }
+  function readDocs(){ return Array.prototype.map.call($("hnsw-doc-fields").querySelectorAll("input"),i=>i.value.trim().slice(0,30)).filter(v=>v.length>0); }
+
+  function renderLaw(d){
+    const el=$("hnsw-law"); if(!el) return;
+    if(!d||!d.law_statement){ el.innerHTML=""; return; }
+    const sk=window.NCSkin||{};
+    let html='<b>What this states:</b> '+d.law_statement;
+    if(d.law_source_url && d.law_source_name){ html+=' <a href="'+d.law_source_url+'" target="_blank" rel="noopener">'+d.law_source_name+'</a>'; }
+    el.innerHTML=html; el.style.color=sk.inkSoft||"";
+    el.querySelectorAll("b").forEach(b=>{b.style.color=sk.ink||"";});
+    el.querySelectorAll("a").forEach(a=>{a.style.color=sk.accent||"";});
+  }
+  function styleFields(){
+    const panel=document.querySelector('.viz-panel[data-slug="'+SLUG+'"]'); if(!panel||!window.NCSkin) return;
+    const bg=NCSkin.paper2||"transparent";
+    panel.querySelectorAll("input, select, button").forEach(el=>{ el.style.background=bg; el.style.color=NCSkin.ink; el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="5px 7px"; });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const n=$("hnsw-anim-note"); if(n) n.style.color=NCSkin.inkSoft;
+    const d=$("hnsw-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  // ---------- build 2D layout from compute layers ----------
+  const LAYER_NAMES=["Layer 2  (sparse / entry)","Layer 1","Layer 0  (dense / base)"];
+  function buildLayout(){
+    layout=null;
+    if(!last||!last.layers) return;
+    const layers=last.layers, best=last.best_index;
+    const W=cv.width, H=cv.height;
+    const leftPad=150, rightPad=40, topPad=40, botPad=40;
+    const bandH=(H-topPad-botPad)/layers.length;
+    const bands=[];
+    layers.forEach((lv,li)=>{
+      const yMid=topPad + bandH*li + bandH/2;
+      const mem=lv.members;
+      const usableW=W-leftPad-rightPad;
+      const nodes=mem.map((di,k)=>{
+        const x = mem.length===1 ? (leftPad+usableW/2)
+              : (leftPad + (usableW/(mem.length+1))*(k+1));
+        return {di, x, y:yMid};
+      });
+      bands.push({li, layer:lv.layer, yTop:topPad+bandH*li, yMid, h:bandH, nodes, members:mem});
+    });
+    // descent: best-or-first node per band, in order top->bottom
+    const path=[];
+    bands.forEach(b=>{
+      let nd = b.nodes.find(n=>n.di===best) || b.nodes[0];
+      if(nd) path.push({li:b.li, di:nd.di, x:nd.x, y:nd.y});
+    });
+    layout={bands, path, best, W, H, leftPad};
+  }
+
+  function draw(){
+    if(!layout){ ctx.clearRect(0,0,cv.width,cv.height); return; }
+    const sk=S();
+    const ink=sk.ink||"#222", soft=sk.inkSoft||"#888", acc=sk.accent||"#b34a23",
+          yes=sk.yes||"#2e7d32", rule=sk.rule||"#ccc", paper2=sk.paper2||"#f4efe6",
+          mono=sk.mono||"monospace", sans=sk.sans||"sans-serif";
+    const {bands,path,best,W,H,leftPad}=layout;
+    ctx.clearRect(0,0,W,H);
+
+    // bands: alternating faint background + label on the left
+    bands.forEach((b,bi)=>{
+      ctx.fillStyle=paper2; ctx.globalAlpha=(bi%2===0)?0.55:0.30;
+      ctx.fillRect(leftPad-10, b.yTop+6, W-leftPad-30, b.h-12);
+      ctx.globalAlpha=1;
+      // band border
+      ctx.strokeStyle=rule; ctx.lineWidth=1;
+      ctx.strokeRect(leftPad-10, b.yTop+6, W-leftPad-30, b.h-12);
+      // layer label (left)
+      ctx.fillStyle=soft; ctx.font="600 13px "+sans; ctx.textAlign="left"; ctx.textBaseline="middle";
+      ctx.fillText(LAYER_NAMES[bi]||("Layer "+b.layer), 12, b.yMid);
+      // intra-band links
+      ctx.strokeStyle=rule; ctx.globalAlpha=0.6; ctx.lineWidth=1;
+      for(let a=0;a<b.nodes.length;a++) for(let c=a+1;c<b.nodes.length;c++){
+        ctx.beginPath(); ctx.moveTo(b.nodes[a].x,b.nodes[a].y); ctx.lineTo(b.nodes[c].x,b.nodes[c].y); ctx.stroke();
+      }
+      ctx.globalAlpha=1;
+    });
+
+    // descent path (vertical, drawn up to current frame in anim; full otherwise)
+    const upto = (mode==="anim") ? fi : (path.length-1);
+    ctx.setLineDash([6,4]); ctx.strokeStyle=acc; ctx.lineWidth=2;
+    for(let i=0;i<path.length-1 && i<upto;i++){
+      ctx.beginPath(); ctx.moveTo(path[i].x,path[i].y); ctx.lineTo(path[i+1].x,path[i+1].y); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // nodes
+    bands.forEach(b=>{
+      b.nodes.forEach(nd=>{
+        const isBest=(nd.di===best);
+        // is this node on the visited part of the path?
+        let visited=false, current=false;
+        for(let i=0;i<=Math.min(fi,path.length-1) && (mode==="anim"); i++){
+          if(path[i].li===b.li && path[i].di===nd.di){ visited=true; if(i===fi) current=true; }
+        }
+        if(mode!=="anim" && isBest) visited=true;
+        let fill = isBest?yes:ink;
+        let r=11;
+        if(mode==="anim" && visited){ fill=current?acc:yes; r=current?15:13; }
+        ctx.beginPath(); ctx.arc(nd.x,nd.y,r,0,Math.PI*2); ctx.fillStyle=fill; ctx.fill();
+        // doc number tag
+        ctx.fillStyle=paper2; ctx.font="700 11px "+mono; ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.fillText("#"+(nd.di+1), nd.x, nd.y);
+        // full text label beside the node (right of it), clipped to band
+        ctx.fillStyle=isBest?yes:soft; ctx.font="12px "+sans; ctx.textAlign="left"; ctx.textBaseline="middle";
+        const txt=last.documents[nd.di]||("doc"+(nd.di+1));
+        ctx.fillText(txt, nd.x+r+6, nd.y);
+      });
+    });
+
+    // query marker
+    if(path.length){
+      let qx,qy;
+      if(mode==="anim"){
+        const p=path[Math.min(fi,path.length-1)];
+        if(fi===0){ qx=p.x; qy=p.y-32; } else { qx=p.x; qy=p.y; }
+      } else { const p=path[path.length-1]; qx=p.x; qy=p.y; }
+      ctx.beginPath(); ctx.arc(qx,qy,9,0,Math.PI*2); ctx.fillStyle=acc; ctx.fill();
+      ctx.strokeStyle=paper2; ctx.lineWidth=2; ctx.stroke();
+      // "search: word" tag near the query
+      ctx.fillStyle=acc; ctx.font="600 12px "+sans; ctx.textAlign="center"; ctx.textBaseline="bottom";
+      ctx.fillText('search: "'+(last.query||"")+'"', qx, qy-12);
+    }
+
+    $("hnsw-frameinfo").textContent="Layer "+(Math.min(fi,path.length-1)+1)+" / "+Math.max(1,path.length);
+    const algoLine=(fi>=path.length-1)?5:Math.min(1+fi,4);
+    if(mode==="anim") renderAlgo(algoLine);
+  }
+
+  // ---------- animation ----------
+  function stop(){ if(playTimer){clearInterval(playTimer);playTimer=null;} playing=false; const b=$("hnsw-play"); if(b)b.textContent="\u25B6 Play descent"; }
+  function play(){
+    stop(); const path=layout?layout.path:[];
+    if(fi>=path.length-1) fi=0;
+    playing=true; const b=$("hnsw-play"); if(b)b.textContent="\u23F8 Pause";
+    playTimer=setInterval(()=>{ if(fi<path.length-1){fi++;draw();} else stop(); },1100);
+  }
+  function stepDown(){ stop(); const path=layout?layout.path:[]; if(fi<path.length-1){fi++;draw();} }
+  function resetA(){ stop(); fi=0; draw(); }
+
+  // ---------- algorithm box ----------
+  function renderAlgo(activeLine){
+    const pre=$("hnsw-algo"); if(!pre||!last||!last.algorithm) return;
+    const sk=S();
+    const lines=(algoTab==="python")?last.algorithm.python:last.algorithm.pseudocode;
+    pre.style.background=sk.paper2||"transparent"; pre.style.color=sk.ink||"#222";
+    pre.style.border="1px solid "+(sk.rule||"#ddd"); pre.style.fontFamily=sk.mono||"monospace";
+    pre.innerHTML=lines.map((ln,idx)=>{
+      const on=(idx===activeLine);
+      const bg=on?(sk.accent||"#b34a23"):"transparent";
+      const fg=on?(sk.paper||"#fff"):(sk.ink||"#222");
+      const esc=ln.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      return '<span style="display:block;padding:1px 6px;border-radius:4px;background:'+bg+';color:'+fg+'">'+esc+'</span>';
+    }).join("");
+  }
+  function styleAlgoTabs(){
+    const sk=S(); const tabs=$("hnsw-algo-tabs"); if(!tabs) return;
+    tabs.style.border="1px solid "+(sk.rule||"#ddd");
+    tabs.querySelectorAll("button").forEach(b=>{
+      const on=b.classList.contains("active");
+      b.style.background=on?(sk.accent||"#b34a23"):(sk.paper2||"transparent");
+      b.style.color=on?(sk.paper||"#fff"):(sk.ink||"#222");
+    });
+  }
+
+  function renderRanking(d){
+    const host=$("hnsw-ranking"); if(!host) return; const sk=S();
+    if(!d.ranked){ host.innerHTML=""; return; }
+    let h='<div style="font-weight:600;margin-bottom:.35rem;color:'+(sk.ink||"#222")+'">Similarity ranking</div>';
+    d.ranked.forEach((r,i)=>{
+      const pct=Math.round(r.score*100), bestRow=(r.index===d.best_index);
+      h+='<div style="display:flex;align-items:center;gap:8px;margin:3px 0">'+
+        '<span style="width:18px;color:'+(sk.inkSoft||"#888")+'">'+(i+1)+'.</span>'+
+        '<span style="flex:0 0 42%;font-family:'+(sk.mono||"monospace")+';color:'+(bestRow?(sk.yes||"#2e7d32"):(sk.ink||"#222"))+';font-weight:'+(bestRow?700:400)+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">#'+(r.index+1)+' "'+r.doc+'"</span>'+
+        '<span style="flex:1;background:'+(sk.rule||"#eee")+';height:9px;border-radius:5px;overflow:hidden"><span style="display:block;height:100%;width:'+pct+'%;background:'+(bestRow?(sk.yes||"#2e7d32"):(sk.accent||"#b34a23"))+'"></span></span>'+
+        '<span style="flex:0 0 42px;text-align:right;font-size:.85rem;color:'+(sk.ink||"#222")+'">'+pct+'%</span>'+
+        '</div>';
+    });
+    host.innerHTML=h;
+  }
+
+  async function update(){
+    const docs=readDocs(), query=$("hnsw-query").value.trim();
+    let data;
+    try{
+      const r=await fetch("/api/compute/"+SLUG,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({documents:docs,query:query})});
+      data=await r.json();
+    }catch(e){ $("viz-out").textContent="compute error"; return; }
+    try{ if(window.NCSteps) NCSteps.render(data.steps||[]); }catch(e){}
+    if(data.disclaimer) $("hnsw-disc").textContent="\u26A0 "+data.disclaimer;
+    renderLaw(data);
+    if(data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; $("hnsw-ranking").innerHTML=""; last=null; ctx.clearRect(0,0,cv.width,cv.height); return; }
+    $("viz-out").innerHTML=`<div style="line-height:1.7"><b>${data.result}</b></div>`;
+    renderRanking(data);
+    try{ if(window.__ncExplain) __ncExplain(data.explanation); }catch(e){}
+    last=data; buildLayout(); fi=(mode==="anim")?0:((layout&&layout.path.length)?layout.path.length-1:0);
+    draw(); renderAlgo(-1); styleAlgoTabs();
+  }
+
+  function stepsPanel(){ return document.getElementById("nc-steps"); }
+  function styleToggle(){
+    if(!window.NCSkin) return;
+    const seg=$("hnsw-learn3"); seg.style.border="1px solid "+NCSkin.rule;
+    seg.querySelectorAll("button").forEach(b=>{
+      const on=b.classList.contains("active");
+      b.style.cursor="pointer"; b.style.border="none"; b.style.padding="6px 14px";
+      b.style.font="13px "+(NCSkin.sans||"sans-serif");
+      b.style.background=on?NCSkin.accent:(NCSkin.paper2||"transparent");
+      b.style.color=on?(NCSkin.paper||"#fff"):NCSkin.ink;
+    });
+    ["hnsw-play","hnsw-stepbtn","hnsw-reset"].forEach(id=>{ const pb=$(id); if(pb){ pb.style.border="1px solid "+NCSkin.rule; pb.style.background=NCSkin.paper2||"transparent"; pb.style.color=NCSkin.ink; } });
+  }
+  const ANIM_NOTE="Your search word enters the sparse top layer and drops layer to layer toward the most similar document, settling on the closest match (green) at the dense base. The code below highlights the line running at each layer.";
+
+  function setMode(m){
+    mode=m; stop();
+    const seg=$("hnsw-learn3");
+    seg.querySelectorAll("button").forEach(b=>{ const on=b.getAttribute("data-mode")===m; b.classList.toggle("active",on); b.setAttribute("aria-pressed",String(on)); });
+    const sp=stepsPanel(), animCtl=$("hnsw-anim-controls"), algoWrap=$("hnsw-algo-wrap");
+    if(sp) sp.style.display=(m==="steps")?"":"none";
+    if(m==="steps" && sp){ sp.hidden=false; sp.style.display=""; const wbtn=document.getElementById("nc-steps-working"); if(wbtn) wbtn.click(); }
+    algoWrap.style.display=(m==="steps"||m==="anim")?"":"none";
+    animCtl.style.display=(m==="anim")?"":"none";
+    if(m==="steps"){ renderAlgo(-1); styleAlgoTabs(); fi=(layout&&layout.path.length)?layout.path.length-1:0; draw(); }
+    if(m==="anim"){ $("hnsw-anim-note").textContent=ANIM_NOTE; fi=0; draw(); styleAlgoTabs(); }
+    if(m==="direct"){ fi=(layout&&layout.path.length)?layout.path.length-1:0; draw(); }
+    styleToggle();
+  }
+
+  $("hnsw-count").addEventListener("change", renderDocFields);
+  $("hnsw-run").addEventListener("click", ()=>{ update().then(()=>setMode(mode)); });
+  $("hnsw-play").addEventListener("click", ()=>{ if(playing) stop(); else play(); });
+  $("hnsw-stepbtn").addEventListener("click", stepDown);
+  $("hnsw-reset").addEventListener("click", resetA);
+  $("hnsw-learn3").querySelectorAll("button").forEach(b=>{ b.addEventListener("click", ()=>setMode(b.getAttribute("data-mode"))); });
+  $("hnsw-algo-tabs").querySelectorAll("button").forEach(b=>{ b.addEventListener("click", ()=>{
+    algoTab=b.getAttribute("data-tab");
+    $("hnsw-algo-tabs").querySelectorAll("button").forEach(x=>x.classList.toggle("active",x===b));
+    styleAlgoTabs(); renderAlgo(mode==="anim"?((fi>=(layout?layout.path.length-1:0))?5:Math.min(1+fi,4)):-1);
+  }); });
+
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", styleToggle);
+  window.addEventListener("nc-theme-change", styleAlgoTabs);
+  window.addEventListener("nc-theme-change", ()=>{ if(last){ renderLaw(last); renderRanking(last); draw(); } });
+
+  renderDocFields(); styleFields();
+  update().then(()=>{
+    const innerToggle=document.querySelector("#nc-steps .nc-steps-toggle");
+    if(innerToggle) innerToggle.style.display="none";
+    setMode("direct");
+  });
+})();
+</script>

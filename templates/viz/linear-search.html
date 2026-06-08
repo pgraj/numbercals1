@@ -1,0 +1,224 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+
+  <div class="viz-inputs" style="align-items:flex-end;gap:18px;flex-wrap:wrap">
+    <label style="flex:1 1 100%">
+      <span style="display:block">List (comma-separated, any order)</span>
+      <span class="nc-field" style="display:block"><input type="text" id="linear-search-array" value="4, 15, 8, 23, 16, 42, 7, 11, 30, 9" style="width:100%"></span>
+    </label>
+    <label><span style="display:block">Target</span>
+      <span class="nc-field" style="display:block"><input type="number" id="linear-search-target" value="7" style="width:110px"></span></label>
+    <label style="align-self:flex-end">
+      <span style="display:block">&nbsp;</span>
+      <span class="nc-field" style="display:block">
+        <button type="button" id="linear-search-run" style="cursor:pointer;border-radius:6px;padding:6px 16px;font-weight:600">Run</button>
+      </span>
+    </label>
+  </div>
+
+  <canvas id="linear-search-canvas" width="820" height="360"
+          style="display:block;width:100%;height:auto;max-width:820px;margin:10px auto 0"></canvas>
+  <p class="viz-caption" id="linear-search-cap" style="font-size:.9rem;margin-top:.5rem;opacity:.85;text-align:center"></p>
+  <p class="viz-law" id="linear-search-law" style="font-size:.86rem;margin-top:.4rem;line-height:1.5;text-align:center"></p>
+  <div class="viz-out" id="viz-out" style="margin-top:10px"></div>
+  
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="linear-search-disc" style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<div class="nc-learn3" id="linear-search-learn3" role="group" aria-label="Answer detail"
+     style="display:inline-flex;border-radius:8px;overflow:hidden;margin:12px 0 6px">
+  <button type="button" data-mode="direct" class="active" aria-pressed="true">Direct answer</button>
+  <button type="button" data-mode="steps" aria-pressed="false">Step-by-step working</button>
+  <button type="button" data-mode="anim" aria-pressed="false">Animation</button>
+</div>
+
+<div id="linear-search-algo-wrap" style="display:none;margin:8px 0">
+  <div id="linear-search-algo-tabs" style="display:inline-flex;border-radius:6px;overflow:hidden;margin-bottom:6px">
+    <button type="button" data-tab="pseudocode" class="active" style="cursor:pointer;border:none;padding:4px 12px;font-size:12px">Pseudocode</button>
+    <button type="button" data-tab="python" style="cursor:pointer;border:none;padding:4px 12px;font-size:12px">Python</button>
+  </div>
+  <pre id="linear-search-algo" style="margin:0;padding:10px 12px;border-radius:8px;font-size:13px;line-height:1.6;overflow-x:auto"></pre>
+</div>
+
+<div id="linear-search-anim-controls" style="display:none;margin:2px 0 6px">
+  <button type="button" id="linear-search-play" style="cursor:pointer;border-radius:6px;padding:4px 12px">&#9654; Play</button>
+  <button type="button" id="linear-search-stepbtn" style="cursor:pointer;border-radius:6px;padding:4px 12px;margin-left:6px">Step &#9656;</button>
+  <button type="button" id="linear-search-reset" style="cursor:pointer;border-radius:6px;padding:4px 12px;margin-left:6px">Reset</button>
+  <span id="linear-search-frameinfo" style="font-size:.82rem;margin-left:10px;opacity:.8"></span>
+  <p id="linear-search-anim-note" style="font-size:.82rem;margin:6px 0 0;opacity:.8;max-width:820px"></p>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>'<div class="nc-explain-card"><div class="nc-explain-h">'+it.heading+'</div><p class="nc-explain-p">'+it.body+'</p></div>').join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const SLUG="{{ calc.slug }}";
+  const cv=$("linear-search-canvas"), ctx=cv.getContext("2d");
+  let last=null, frames=[], fi=0, raf=null, playing=false, mode="direct", algoTab="pseudocode";
+  function S(){ return window.NCSkin||{}; }
+
+  function renderLaw(d){
+    const el=$("linear-search-law"); if(!el) return;
+    if(!d||!d.law_statement){ el.innerHTML=""; return; }
+    const sk=S(); let html='<b>What this states:</b> '+d.law_statement;
+    if(d.law_source_url && d.law_source_name){ html+=' <a href="'+d.law_source_url+'" target="_blank" rel="noopener">'+d.law_source_name+'</a>'; }
+    el.innerHTML=html; el.style.color=sk.inkSoft||"";
+    el.querySelectorAll("b").forEach(b=>{b.style.color=sk.ink||"";});
+    el.querySelectorAll("a").forEach(a=>{a.style.color=sk.accent||"";});
+  }
+  function styleFields(){
+    const panel=document.querySelector('.viz-panel[data-slug="'+SLUG+'"]'); if(!panel||!window.NCSkin) return;
+    const bg=NCSkin.paper2||"transparent";
+    panel.querySelectorAll("input, select, button").forEach(el=>{ el.style.background=bg; el.style.color=NCSkin.ink; el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="5px 7px"; });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const n=$("linear-search-anim-note"); if(n) n.style.color=NCSkin.inkSoft;
+    const d=$("linear-search-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  // ---- per-algorithm frame builder ----
+  function buildFrames(){
+    frames=[];
+    if(!last) return;
+frames=last.frames||[];
+  }
+
+  // ---- per-algorithm canvas draw for the current frame ----
+  function draw(){
+    const sk=S();
+    const ink=sk.ink||"#222", soft=sk.inkSoft||"#888", acc=sk.accent||"#b34a23",
+          yes=sk.yes||"#2e7d32", warn="#e0a300", rule=sk.rule||"#ccc",
+          paper=sk.paper2||"#f4efe6", mono=sk.mono||"monospace", sans=sk.sans||"sans-serif";
+    const W=cv.width,H=cv.height;
+    ctx.clearRect(0,0,W,H);
+    const fr=frames[fi]||null;
+
+    if(!last||!last.array){ return; }
+    const arr=last.array, n=arr.length;
+    const pad=36, top=70, gap=8, botH=60;
+    const bw=(W-pad*2-gap*(n-1))/n, baseY=H-botH, maxV=Math.max.apply(null,arr);
+    const cur=fr?fr.i:-1, matched=fr&&fr.match;
+    for(let i=0;i<n;i++){
+      const x=pad+i*(bw+gap);
+      const h=24+(arr[i]/maxV)*(baseY-top-24), y=baseY-h;
+      let fill=rule, alpha=1;
+      if(i<cur){ alpha=0.3; fill=rule; }              // already checked
+      else if(i===cur){ fill=matched?yes:warn; }      // current
+      else { fill=ink; alpha=0.85; }                  // not yet
+      ctx.globalAlpha=alpha; ctx.fillStyle=fill; ctx.fillRect(x,y,bw,h); ctx.globalAlpha=1;
+      ctx.fillStyle=ink; ctx.font="600 13px "+mono; ctx.textAlign="center"; ctx.fillText(String(arr[i]),x+bw/2,y-7);
+      ctx.fillStyle=soft; ctx.font="10px "+mono; ctx.fillText("["+i+"]",x+bw/2,baseY+16);
+    }
+    ctx.fillStyle=ink; ctx.font="14px "+sans; ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+    let msg="Scanning for "+last.target;
+    if(fr){ if(fr.i<0) msg=last.target+" not found"; else if(fr.match) msg="Found "+last.target+" at index "+fr.i; else msg="Check index "+fr.i+": "+arr[fr.i]+" != "+last.target; }
+    ctx.fillText(msg, pad, 34);
+    $("linear-search-cap").textContent="Each box is a list item; the scan checks them one by one from the left.";
+
+    const info=$("linear-search-frameinfo"); if(info) info.textContent="Step "+(fi+1)+" / "+Math.max(1,frames.length);
+    if(mode==="anim" && fr && typeof fr.line==="number") renderAlgo(fr.line);
+  }
+
+  function stop(){ if(raf){clearInterval(raf);raf=null;} playing=false; const b=$("linear-search-play"); if(b)b.textContent="\u25B6 Play"; }
+  function play(){ stop(); if(fi>=frames.length-1) fi=0; playing=true; const b=$("linear-search-play"); if(b)b.textContent="\u23F8 Pause";
+    raf=setInterval(()=>{ if(fi<frames.length-1){fi++;draw();} else stop(); }, 850); }
+  function stepOne(){ stop(); if(fi<frames.length-1){fi++;draw();} }
+  function resetA(){ stop(); fi=0; draw(); }
+
+  function renderAlgo(activeLine){
+    const pre=$("linear-search-algo"); if(!pre||!last||!last.algorithm) return;
+    const sk=S(); const lines=(algoTab==="python")?last.algorithm.python:last.algorithm.pseudocode;
+    pre.style.background=sk.paper2||"transparent"; pre.style.color=sk.ink||"#222";
+    pre.style.border="1px solid "+(sk.rule||"#ddd"); pre.style.fontFamily=sk.mono||"monospace";
+    pre.innerHTML=lines.map((ln,idx)=>{ const on=(idx===activeLine);
+      const bg=on?(sk.accent||"#b34a23"):"transparent"; const fg=on?(sk.paper||"#fff"):(sk.ink||"#222");
+      const esc=ln.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      return '<span style="display:block;padding:1px 6px;border-radius:4px;background:'+bg+';color:'+fg+'">'+esc+'</span>';
+    }).join("");
+  }
+  function styleAlgoTabs(){
+    const sk=S(); const tabs=$("linear-search-algo-tabs"); if(!tabs) return;
+    tabs.style.border="1px solid "+(sk.rule||"#ddd");
+    tabs.querySelectorAll("button").forEach(b=>{ const on=b.classList.contains("active");
+      b.style.background=on?(sk.accent||"#b34a23"):(sk.paper2||"transparent"); b.style.color=on?(sk.paper||"#fff"):(sk.ink||"#222"); });
+  }
+
+  async function update(){
+    const body=collectInputs();
+    let data;
+    try{ const r=await fetch("/api/compute/"+SLUG,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $("viz-out").textContent="compute error"; return; }
+    try{ if(window.NCSteps) NCSteps.render(data.steps||[]); }catch(e){}
+    if(data.disclaimer) $("linear-search-disc").textContent="\u26A0 "+data.disclaimer;
+    renderLaw(data);
+    if(data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; last=null; ctx.clearRect(0,0,cv.width,cv.height); return; }
+    $("viz-out").innerHTML='<div style="line-height:1.7"><b>'+data.result+'</b></div>';
+    try{ if(window.__ncExplain) __ncExplain(data.explanation); }catch(e){}
+    last=data; buildFrames(); fi=(mode==="anim")?0:(frames.length?frames.length-1:0);
+    draw(); renderAlgo(-1); styleAlgoTabs();
+    if(typeof afterUpdate==="function") afterUpdate(data);
+  }
+
+  function stepsPanel(){ return document.getElementById("nc-steps"); }
+  function styleToggle(){
+    if(!window.NCSkin) return; const seg=$("linear-search-learn3"); seg.style.border="1px solid "+NCSkin.rule;
+    seg.querySelectorAll("button").forEach(b=>{ const on=b.classList.contains("active");
+      b.style.cursor="pointer"; b.style.border="none"; b.style.padding="6px 14px"; b.style.font="13px "+(NCSkin.sans||"sans-serif");
+      b.style.background=on?NCSkin.accent:(NCSkin.paper2||"transparent"); b.style.color=on?(NCSkin.paper||"#fff"):NCSkin.ink; });
+    ["linear-search-play","linear-search-stepbtn","linear-search-reset"].forEach(id=>{ const pb=$(id); if(pb){ pb.style.border="1px solid "+NCSkin.rule; pb.style.background=NCSkin.paper2||"transparent"; pb.style.color=NCSkin.ink; } });
+  }
+  const ANIM_NOTE="The scan moves left to right, checking one item at a time. The current item is highlighted; items already ruled out are dimmed. It stops at the first match, or runs to the end if the target is absent.";
+  function setMode(m){
+    mode=m; stop();
+    const seg=$("linear-search-learn3");
+    seg.querySelectorAll("button").forEach(b=>{ const on=b.getAttribute("data-mode")===m; b.classList.toggle("active",on); b.setAttribute("aria-pressed",String(on)); });
+    const sp=stepsPanel(), animCtl=$("linear-search-anim-controls"), algoWrap=$("linear-search-algo-wrap");
+    if(sp) sp.style.display=(m==="steps")?"":"none";
+    if(m==="steps" && sp){ sp.hidden=false; sp.style.display=""; const wbtn=document.getElementById("nc-steps-working"); if(wbtn) wbtn.click(); }
+    algoWrap.style.display=(m==="steps"||m==="anim")?"":"none";
+    animCtl.style.display=(m==="anim")?"":"none";
+    if(m==="steps"){ renderAlgo(-1); styleAlgoTabs(); fi=frames.length?frames.length-1:0; draw(); }
+    if(m==="anim"){ $("linear-search-anim-note").textContent=ANIM_NOTE; fi=0; draw(); styleAlgoTabs(); }
+    if(m==="direct"){ fi=frames.length?frames.length-1:0; draw(); }
+    styleToggle();
+  }
+
+  $("linear-search-run").addEventListener("click", ()=>{ update().then(()=>setMode(mode)); });
+  $("linear-search-play").addEventListener("click", ()=>{ if(playing) stop(); else play(); });
+  $("linear-search-stepbtn").addEventListener("click", stepOne);
+  $("linear-search-reset").addEventListener("click", resetA);
+  $("linear-search-learn3").querySelectorAll("button").forEach(b=>{ b.addEventListener("click", ()=>setMode(b.getAttribute("data-mode"))); });
+  $("linear-search-algo-tabs").querySelectorAll("button").forEach(b=>{ b.addEventListener("click", ()=>{
+    algoTab=b.getAttribute("data-tab"); $("linear-search-algo-tabs").querySelectorAll("button").forEach(x=>x.classList.toggle("active",x===b));
+    styleAlgoTabs(); renderAlgo(mode==="anim"?((frames[fi]&&typeof frames[fi].line==="number")?frames[fi].line:-1):-1); }); });
+
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", styleToggle);
+  window.addEventListener("nc-theme-change", styleAlgoTabs);
+  window.addEventListener("nc-theme-change", ()=>{ if(last){ renderLaw(last); draw(); } });
+
+  styleFields();
+  update().then(()=>{ const it=document.querySelector("#nc-steps .nc-steps-toggle"); if(it) it.style.display="none"; setMode("direct"); });
+
+  // ---- per-algorithm input collection + optional afterUpdate ----
+  function collectInputs(){ var arr=($("linear-search-array").value||"").split(",").map(t=>parseInt(t.trim(),10)).filter(v=>!isNaN(v)); return {array:arr, target:parseInt($("linear-search-target").value,10)}; }
+  var afterUpdate=null;
+})();
+</script>

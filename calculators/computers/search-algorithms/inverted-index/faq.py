@@ -1,0 +1,16 @@
+from core.faqs import register_faqs
+
+register_faqs('inverted-index', [
+    {"q": 'Is an inverted index like the index at the back of a textbook?',
+     "a": "Precisely. You look up 'photosynthesis' in the back-of-book index and get the exact page numbers, instead of re-reading the whole book. An inverted index does this for search engines: it maps each word to the list of documents containing it, so a query jumps straight to matching documents without scanning any text at query time. It is the retrieval backbone of every search engine - the same time-saver as a book index, at web scale."},
+    {"q": "Why is it called an 'inverted' index?",
+     "a": 'Because it inverts the natural arrangement of the data. Documents naturally map to the words they contain (document -> words). A search needs the opposite: given a word, which documents contain it (word -> documents). The inverted index pre-computes that reversed mapping. The name simply reflects that it flips the document-to-words relationship into words-to-documents, which is the direction every keyword search actually needs.'},
+    {"q": 'What is a postings list?',
+     "a": "It is the list of documents associated with a single term - the value side of the inverted index. For the term 'cat', the postings list is every document ID containing 'cat'. Richer indexes store more in each posting: the positions where the word appears (for phrase search), the frequency (for ranking), and field information. Postings lists are usually kept sorted by document ID, which makes intersecting them - the core of multi-word queries - efficient."},
+    {"q": 'How does an inverted index answer a multi-word query?',
+     "a": "It looks up each query word to get its postings list, then combines the lists. For an AND query ('cat' and 'dog'), it intersects the lists to find documents containing both; for an OR query, it unions them. Because postings lists are sorted, intersection is a fast merge. Crucially, the engine touches only the relevant postings lists, never the full text of any document - which is why search returns results in milliseconds even over billions of pages."},
+    {"q": 'Why not just scan every document for the query words?',
+     "a": "Scanning every document at query time is O(total text size) per query - hopelessly slow at web scale, where you might search billions of documents. The inverted index moves that work to build time: the corpus is scanned once to construct the index, and thereafter each query only examines the postings lists of its terms. It is the same principle as a book's back-of-book index versus re-reading the whole book every time you want to find a topic."},
+    {"q": 'What else does a real search engine add on top of the inverted index?',
+     "a": 'The index finds candidate documents; ranking decides their order. Real engines layer relevance scoring (TF-IDF or BM25, the next calculator) to rank by how well each document matches, and importance signals like PageRank for web search. They also store term positions for phrase and proximity queries, compress postings lists heavily to save space, and distribute the index across many machines. The inverted index is the retrieval backbone; scoring and ranking turn raw matches into a useful ordered result.'},
+])

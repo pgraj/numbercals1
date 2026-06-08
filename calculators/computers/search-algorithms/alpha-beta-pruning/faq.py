@@ -1,0 +1,16 @@
+from core.faqs import register_faqs
+
+register_faqs('alpha-beta-pruning', [
+    {"q": "Is alpha-beta like abandoning a chess line that's already worse?",
+     "a": 'Exactly that mid-game realisation. When you spot that a line is already worse than one you have found, you stop calculating it and save your brainpower for better options. Alpha-beta pruning does this automatically: it tracks the best each player can already guarantee, and the moment a branch cannot possibly beat that, it abandons the rest of the branch. It reaches the same answer as minimax but skips provably pointless calculation - often letting an engine search twice as deep.'},
+    {"q": 'What do alpha and beta actually represent?',
+     "a": 'Alpha is the best score the maximising player (you) can already guarantee somewhere higher in the tree; beta is the best the minimising player (opponent) can guarantee. As the search descends, these bounds tighten. The crucial moment is when they cross - alpha becomes greater than or equal to beta - because that means the current line cannot possibly affect the final choice: one side already has a better option elsewhere. At that point the remaining branches are pruned.'},
+    {"q": 'How can alpha-beta skip branches yet give the same answer as minimax?',
+     "a": "Because it only prunes branches it can prove are irrelevant. If MAX has already found a move guaranteeing a score of 6, and the opponent's reply in some other branch can force the score down to 2, MAX will never choose that branch - so there is no need to evaluate its remaining options; they cannot change MAX's decision. The pruned branches could not have produced a better result, so discarding them leaves the root value exactly as minimax would compute it."},
+    {"q": 'Why does move ordering matter so much for alpha-beta?',
+     "a": 'Pruning is most effective when the best moves are examined first, because a strong early move raises alpha (or lowers beta) quickly, causing more later branches to be cut. With perfect ordering, alpha-beta reaches O(b^(d/2)) - effectively doubling the search depth for the same cost. With worst-case ordering (best moves last), it prunes almost nothing and degrades to plain minimax. This is why real chess engines invest heavily in heuristics to guess and try promising moves first.'},
+    {"q": 'How much faster is alpha-beta than plain minimax?',
+     "a": 'In the best case it reduces the effective branching factor from b to roughly the square root of b, so the cost drops from O(b^d) to about O(b^(d/2)). Practically, that means an engine can search roughly twice as deep in the same time - a massive advantage in games like chess where each extra ply of depth sharply improves play. The answer is identical to minimax; only the wasted work is removed.'},
+    {"q": 'Do real chess engines just use alpha-beta?',
+     "a": 'Alpha-beta is the backbone, but real engines layer many enhancements on top: transposition tables (caching positions reached by different move orders), iterative deepening, killer-move and history heuristics for ordering, quiescence search to avoid stopping mid-capture, and aspiration windows. The Stockfish lineage is built on this alpha-beta framework. Newer engines also blend in neural-network evaluation, but the pruning principle shown here remains central to classical game-tree search.'},
+])

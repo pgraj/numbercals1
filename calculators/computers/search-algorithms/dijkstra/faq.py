@@ -1,0 +1,16 @@
+from core.faqs import register_faqs
+
+register_faqs('dijkstra', [
+    {"q": 'Is Dijkstra like picking the cheapest mix of trains and buses?',
+     "a": "Yes. Crossing the city when each leg has a different fare, you always extend the cheapest route found so far, gradually settling the lowest-cost way to reach each stop. Dijkstra does exactly this: it repeatedly expands the unvisited node with the smallest known cost from the start, locking in each node's cheapest cost as it goes. It guarantees the cheapest overall route, as long as no fare is negative."},
+    {"q": 'Why does Dijkstra expand the closest node first?',
+     "a": "Because that gives a guarantee: with non-negative edge weights, the unvisited node nearest to the start cannot possibly be reached more cheaply by any longer route - every other path to it would have to pass through nodes that are already further away. So the moment Dijkstra picks the closest unsettled node, it knows that node's shortest distance is final and can stop reconsidering it. This 'settle the nearest, lock it in' rule is what makes the algorithm correct and efficient."},
+    {"q": 'Why does Dijkstra require non-negative edge weights?',
+     "a": "The correctness rests on the idea that once you settle a node as closest, no cheaper path to it can appear later. A negative edge breaks that: a longer route could suddenly become cheaper by traversing a negative edge, undercutting a node you already finalised. Then Dijkstra's locked-in distances would be wrong. For graphs with negative weights you need the Bellman-Ford algorithm, which is slower but handles them (and can also detect negative cycles)."},
+    {"q": "What is 'relaxing' an edge?",
+     "a": "Relaxing edge u->v means asking: 'Is the path to v through u cheaper than the best path to v I have found so far?' If dist[u] + weight(u,v) is less than the current dist[v], you update dist[v] to that smaller value and record u as v's predecessor. Relaxation is how shortest distances gradually improve; Dijkstra relaxes every edge out of each node when it settles that node, and the priority queue ensures it settles nodes in the right order."},
+    {"q": 'How does the priority queue make Dijkstra efficient?',
+     "a": "Dijkstra repeatedly needs 'the unvisited node with the smallest distance.' A naive scan of all nodes for the minimum each time costs O(V) per step, giving O(V^2) overall. A binary-heap priority queue returns the minimum in O(log V) and updates distances in O(log V), bringing the total to O((V + E) log V) - far better on sparse graphs. The choice of data structure directly determines Dijkstra's speed, which is why heaps (or Fibonacci heaps in theory) are central to it."},
+    {"q": 'How is Dijkstra related to BFS and to A*?',
+     "a": 'Dijkstra is essentially BFS generalised to weighted graphs: BFS expands by number of edges (treating every edge as cost 1), Dijkstra expands by total cost. A* is Dijkstra plus a heuristic - it adds an estimate of the remaining distance to the goal, so it heads toward the goal instead of spreading evenly in all directions. With a zero heuristic, A* becomes exactly Dijkstra. They form a family: BFS for unweighted, Dijkstra for weighted-blind, A* for weighted-with-a-sense-of-direction.'},
+])
