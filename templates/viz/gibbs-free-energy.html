@@ -1,0 +1,188 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+
+  <div class="viz-inputs" style="align-items:flex-end;gap:24px;flex-wrap:wrap">
+    <label><span style="display:block">ΔH (kJ/mol)</span><span class="nc-field" style="display:block"><input type="number" id="cx-dH" value="-100" step="any" style="width:110px"></span></label>
+    <label><span style="display:block">Temperature T (K)</span><span class="nc-field" style="display:block"><input type="number" id="cx-T" value="298" step="any" style="width:100px"></span></label>
+    <label><span style="display:block">ΔS (kJ/mol·K)</span><span class="nc-field" style="display:block"><input type="number" id="cx-dS" value="0.1" step="any" style="width:110px"></span></label>
+    <label style="align-self:flex-end"><span style="display:block">&nbsp;</span>
+      <span class="nc-field" style="display:block">
+        <button type="button" id="cx-run" style="cursor:pointer;border-radius:6px;padding:6px 16px;font-weight:600">Calculate</button>
+      </span></label>
+  </div>
+
+  <canvas id="cx-canvas" width="720" height="340"
+          style="display:block;width:100%;height:auto;max-width:640px;margin:10px auto 0"></canvas>
+  <p class="viz-caption" id="cx-cap" style="font-size:.9rem;margin-top:.5rem;opacity:.85;text-align:center"></p>
+
+  <div class="viz-out" id="viz-out" style="margin-top:10px"></div>
+
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="cx-disc" style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<div class="nc-learn3" id="cx-learn3" role="group" aria-label="Answer detail"
+     style="display:inline-flex;border-radius:8px;overflow:hidden;margin:12px 0 6px">
+  <button type="button" data-mode="direct" class="active" aria-pressed="true">Direct answer</button>
+  <button type="button" data-mode="steps" aria-pressed="false">Step-by-step working</button>
+  <button type="button" data-mode="anim" aria-pressed="false">Animation</button>
+</div>
+
+<div id="cx-anim-controls" style="display:none;margin:2px 0 6px">
+  <button type="button" id="cx-play" style="cursor:pointer;border-radius:6px;padding:4px 12px">&#9654; Play</button>
+  <p id="cx-anim-note" style="font-size:.82rem;margin:6px 0 0;opacity:.8;max-width:640px"></p>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById("nc-explain-box");
+  function style(){
+    if(!box||!window.NCSkin) return;
+    box.querySelectorAll(".nc-explain-card").forEach(c=>{c.style.background=NCSkin.paper2;c.style.border="1px solid "+NCSkin.rule;c.style.borderRadius="8px";c.style.padding="12px 14px";c.style.marginBottom="10px";});
+    box.querySelectorAll(".nc-explain-h").forEach(h=>{h.style.color=NCSkin.accent;h.style.fontFamily=NCSkin.mono||"monospace";h.style.fontSize="14px";h.style.margin="0 0 6px";h.style.fontWeight="600";});
+    box.querySelectorAll(".nc-explain-p").forEach(p=>{p.style.color=NCSkin.ink;p.style.fontSize="14.5px";p.style.lineHeight="1.55";p.style.margin="0";});
+    box.querySelectorAll(".nc-legend-row").forEach(r=>{r.style.display="flex";r.style.gap="10px";r.style.alignItems="baseline";r.style.margin="3px 0";});
+    box.querySelectorAll(".nc-legend-sym").forEach(s=>{s.style.color=NCSkin.accent;s.style.fontFamily=NCSkin.mono||"monospace";s.style.fontWeight="700";s.style.minWidth="58px";s.style.fontSize="14.5px";});
+    box.querySelectorAll(".nc-legend-def").forEach(d=>{d.style.color=NCSkin.ink;d.style.fontSize="14px";d.style.lineHeight="1.5";});
+  }
+  window.__ncExplain=function(items){
+    if(!box) return;
+    if(!items||!items.length){ box.innerHTML=""; return; }
+    box.innerHTML=items.map(it=>{
+      if(it.legend){
+        const rows=it.legend.map(L=>`<div class="nc-legend-row"><span class="nc-legend-sym">${L[0]}</span><span class="nc-legend-def">${L[1]}</span></div>`).join("");
+        return `<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div>${rows}</div>`;
+      }
+      return `<div class="nc-explain-card"><div class="nc-explain-h">${it.heading}</div><p class="nc-explain-p">${it.body}</p></div>`;
+    }).join("");
+    style();
+  };
+  window.addEventListener("nc-theme-change", style);
+})();
+</script>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const cv = $("cx-canvas"), ctx = cv.getContext("2d");
+  const SLUG = "{{ calc.slug }}";
+  let last = null;
+  function S(){ return window.NCSkin || {}; }
+  function fmt(x){ if(x===null||x===undefined||isNaN(x)) return ""; return (Math.abs(x-Math.round(x))<1e-9)?String(Math.round(x)):(Math.round(x*100000)/100000).toString(); }
+
+  // ---- two-colour mix helper: blend navy->white style mixing for solvent/solution ----
+  function mix(c1,c2,f){ // f 0..1
+    function p(h){ h=h.replace('#',''); if(h.length===3)h=h.split('').map(x=>x+x).join(''); return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]; }
+    const a=p(c1), b=p(c2); const r=a.map((v,i)=>Math.round(v+(b[i]-v)*f));
+    return "rgb("+r[0]+","+r[1]+","+r[2]+")";
+  }
+
+  function buildBody(){ return {dH:parseFloat($("cx-dH").value), T:parseFloat($("cx-T").value), dS:parseFloat($("cx-dS").value)}; }
+
+  function renderOut(d){
+    const sk=S();
+    let h='<div style="line-height:1.8"><b>'+d.result+'</b>';
+    if(d.verified){ h+=' <span style="color:'+(sk.yes||"#2e7d32")+';font-weight:600">&#10003;</span>'; }
+    h+='</div>';
+    if(d.formula_plain){ h+='<div style="margin-top:8px;font-size:14.5px;line-height:1.6;opacity:.95">'+d.formula_plain+'</div>'; }
+    $("viz-out").innerHTML=h;
+    if(window.MathJax&&MathJax.typesetPromise) MathJax.typesetPromise([$("viz-out")]);
+  }
+
+  function draw(d,t){
+    const sk=S(); const W=cv.width,H=cv.height;
+    ctx.clearRect(0,0,W,H);
+    if(!d||!window.NCSkin){ return; }
+    const ink=sk.ink||"#222", soft=sk.inkSoft||"#888", acc=sk.accent||"#1a8a6b",
+          yes=sk.yes||"#2e7d32", warn="#e0a300", rule=sk.rule||"#ccc",
+          paper=sk.paper||"#fff", paper2=sk.paper2||"#eef5f2", mono=sk.mono||"monospace", sans=sk.sans||"sans-serif";
+    const g = (t!==undefined? t : 1);  // animation progress 0..1
+
+    const cx=W/2, top=70; const dGneg=(d.dG!==undefined? d.dG<0 : true);
+    ctx.strokeStyle=ink; ctx.lineWidth=2;
+    const x0=cx-150, x1=cx+150, yhi=top, ylo=top+120;
+    ctx.beginPath(); if(dGneg){ ctx.moveTo(x0,yhi); ctx.lineTo(x1,ylo);} else { ctx.moveTo(x0,ylo); ctx.lineTo(x1,yhi);} ctx.stroke();
+    const gg=(mode==="anim"?g:0.6);
+    let bx,by;
+    if(dGneg){ bx=x0+(x1-x0)*gg; by=yhi+(ylo-yhi)*gg; } else { bx=x0+(x1-x0)*(0.12); by=ylo+(yhi-ylo)*(0.12); }
+    ctx.fillStyle=acc; ctx.beginPath(); ctx.arc(bx,by-9,11,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=ink; ctx.font="600 18px "+sans; ctx.textAlign="center"; ctx.textBaseline="alphabetic"; ctx.fillText("\u0394G = "+fmt(d.dG), cx, ylo+54);
+    ctx.fillStyle=dGneg?"#2e7d32":warn; ctx.font="13px "+sans; ctx.fillText(dGneg?"rolls downhill on its own (spontaneous)":"needs a push uphill (non-spontaneous)", cx, ylo+76);
+    $("cx-cap").textContent=(mode==="anim")?(dGneg?"\u0394G is negative - the ball rolls downhill by itself.":"\u0394G is positive - the ball can't climb without help."):"Negative \u0394G = downhill = spontaneous; positive = uphill = needs energy.";
+
+  }
+
+  function styleFields(){
+    const panel=document.querySelector('.viz-panel[data-slug="'+SLUG+'"]');
+    if(!panel||!window.NCSkin) return;
+    const bg=NCSkin.paper2||"transparent";
+    panel.querySelectorAll("input, select, button").forEach(el=>{ el.style.background=bg; el.style.color=NCSkin.ink; el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="5px 8px"; });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const n=$("cx-anim-note"); if(n) n.style.color=NCSkin.inkSoft;
+    const dd=$("cx-disc"); if(dd){ dd.style.background=NCSkin.paper2; dd.style.color=NCSkin.inkSoft; dd.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  async function update(){
+    const body=buildBody(); let data;
+    try{ const r=await fetch("/api/compute/"+SLUG,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $("viz-out").textContent="compute error"; return; }
+    try{ if(window.NCSteps) NCSteps.render(data.steps||[]); }catch(e){}
+    if(data.disclaimer) $("cx-disc").textContent="\u26a0 "+data.disclaimer;
+    if(data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; try{window.__ncExplain([]);}catch(e){} last=null; draw(null); return; }
+    renderOut(data);
+    try{ if(window.__ncExplain) __ncExplain(data.explanation); }catch(e){}
+    last=data; draw(last);
+  }
+
+  let mode="direct", raf=null, playing=false, animStart=null;
+  const DURATION=4200;
+  const ANIM_NOTE="Press Play to watch it happen, and change any value to update instantly.";
+  function stepsPanel(){ return document.getElementById("nc-steps"); }
+  function styleToggle(){
+    if(!window.NCSkin) return;
+    const seg=$("cx-learn3"); seg.style.border="1px solid "+NCSkin.rule;
+    seg.querySelectorAll("button").forEach(b=>{ const on=b.classList.contains("active");
+      b.style.cursor="pointer"; b.style.border="none"; b.style.padding="6px 14px"; b.style.font="13px "+(NCSkin.sans||"sans-serif");
+      b.style.background=on?NCSkin.accent:(NCSkin.paper2||"transparent"); b.style.color=on?(NCSkin.paper||"#fff"):NCSkin.ink; });
+    const pb=$("cx-play"); if(pb){ pb.style.border="1px solid "+NCSkin.rule; pb.style.background=NCSkin.paper2||"transparent"; pb.style.color=NCSkin.ink; }
+  }
+  function stopPlay(){ if(raf){cancelAnimationFrame(raf);raf=null;} playing=false; animStart=null; const pb=$("cx-play"); if(pb)pb.innerHTML="&#9654; Play"; if(last) draw(last); }
+  function startPlay(){
+    if(raf||!last) return; playing=true; const pb=$("cx-play"); if(pb)pb.innerHTML="&#10073;&#10073; Pause";
+    function frame(ts){ if(animStart===null)animStart=ts; let t=(ts-animStart)/DURATION; if(t>=1)t=1;
+      draw(last,t); if(t<1){raf=requestAnimationFrame(frame);} else {raf=null;playing=false;const b=$("cx-play");if(b)b.innerHTML="&#9654; Play";} }
+    raf=requestAnimationFrame(frame);
+  }
+  function togglePlay(){ if(playing) stopPlay(); else startPlay(); }
+  function setMode(m){
+    mode=m; stopPlay();
+    const seg=$("cx-learn3");
+    seg.querySelectorAll("button").forEach(b=>{ const on=b.getAttribute("data-mode")===m; b.classList.toggle("active",on); b.setAttribute("aria-pressed",String(on)); });
+    const sp=stepsPanel(), animCtl=$("cx-anim-controls");
+    if(sp) sp.style.display=(m==="steps")?"":"none";
+    if(m==="steps"&&sp){ sp.hidden=false; sp.style.display=""; const w=document.getElementById("nc-steps-working"); if(w)w.click(); }
+    animCtl.style.display=(m==="anim")?"":"none";
+    if(m==="anim") $("cx-anim-note").textContent=ANIM_NOTE;
+    draw(last); styleToggle();
+  }
+  $("cx-learn3").querySelectorAll("button").forEach(b=>{ b.addEventListener("click",()=>setMode(b.getAttribute("data-mode"))); });
+  $("cx-play").addEventListener("click",togglePlay);
+  $("cx-run").addEventListener("click", update);
+  // LIVE UPDATE: recompute + redraw whenever any input changes (no refresh needed).
+  (function wireLive(){
+    const panel=document.querySelector('.viz-panel[data-slug="'+SLUG+'"]');
+    if(!panel) return;
+    panel.querySelectorAll("input, select").forEach(el=>{
+      el.addEventListener("input", ()=>{ update().then(()=>{ if(mode==="anim"){ stopPlay(); startPlay(); } }); });
+      el.addEventListener("change", ()=>{ update().then(()=>{ if(mode==="anim"){ stopPlay(); startPlay(); } }); });
+    });
+  })();
+
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", styleToggle);
+  window.addEventListener("nc-theme-change", ()=>{ if(last) draw(last); });
+
+  styleFields();
+  $("cx-cap").textContent="See the result build.";
+  update().then(()=>{ const it=document.querySelector("#nc-steps .nc-steps-toggle"); if(it) it.style.display="none"; setMode("direct"); });
+})();
+</script>
