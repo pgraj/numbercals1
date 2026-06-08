@@ -1,0 +1,182 @@
+<div class="viz-panel" data-slug="{{ calc.slug }}">
+
+  <div class="viz-inputs" style="align-items:flex-end;gap:18px;flex-wrap:wrap">
+    <label><span style="display:block">x</span><span class="nc-field" style="display:block"><input type="number" id="product-x-plus-a-x-plus-b-x" value="5" style="width:84px"></span></label>
+    <label><span style="display:block">a</span><span class="nc-field" style="display:block"><input type="number" id="product-x-plus-a-x-plus-b-a" value="2" style="width:84px"></span></label>
+    <label><span style="display:block">b</span><span class="nc-field" style="display:block"><input type="number" id="product-x-plus-a-x-plus-b-b" value="3" style="width:84px"></span></label>
+
+    <label style="align-self:flex-end"><span style="display:block">&nbsp;</span>
+      <span class="nc-field" style="display:block">
+        <button type="button" id="product-x-plus-a-x-plus-b-run" style="cursor:pointer;border-radius:6px;padding:6px 16px;font-weight:600">Verify</button>
+      </span></label>
+  </div>
+
+  <canvas id="product-x-plus-a-x-plus-b-canvas" width="820" height="300"
+          style="display:block;width:100%;height:auto;max-width:820px;margin:10px auto 0"></canvas>
+  <p class="viz-caption" id="product-x-plus-a-x-plus-b-cap" style="font-size:.9rem;margin-top:.5rem;opacity:.85;text-align:center"></p>
+  <p class="viz-law" id="product-x-plus-a-x-plus-b-law" style="font-size:.86rem;margin-top:.4rem;line-height:1.5;text-align:center"></p>
+  <div class="viz-out" id="viz-out" style="margin-top:10px"></div>
+  <div class="viz-explain" id="nc-explain-box" style="margin-top:16px"></div>
+  <p class="viz-disclaimer" id="product-x-plus-a-x-plus-b-disc" style="font-size:.82rem;margin-top:.75rem;padding:8px 10px;border-radius:6px"></p>
+</div>
+
+<div class="nc-learn3" id="product-x-plus-a-x-plus-b-learn3" role="group" aria-label="Answer detail"
+     style="display:inline-flex;border-radius:8px;overflow:hidden;margin:12px 0 6px">
+  <button type="button" data-mode="direct" class="active" aria-pressed="true">Direct answer</button>
+  <button type="button" data-mode="steps" aria-pressed="false">Step-by-step working</button>
+  <button type="button" data-mode="anim" aria-pressed="false">Animation</button>
+</div>
+
+<div id="product-x-plus-a-x-plus-b-anim-controls" style="display:none;margin:2px 0 6px">
+  <button type="button" id="product-x-plus-a-x-plus-b-play" style="cursor:pointer;border-radius:6px;padding:4px 12px">&#9654; Play</button>
+  <button type="button" id="product-x-plus-a-x-plus-b-stepbtn" style="cursor:pointer;border-radius:6px;padding:4px 12px;margin-left:6px">Step &#9656;</button>
+  <button type="button" id="product-x-plus-a-x-plus-b-reset" style="cursor:pointer;border-radius:6px;padding:4px 12px;margin-left:6px">Reset</button>
+  <span id="product-x-plus-a-x-plus-b-frameinfo" style="font-size:.82rem;margin-left:10px;opacity:.8"></span>
+  <p id="product-x-plus-a-x-plus-b-anim-note" style="font-size:.82rem;margin:6px 0 0;opacity:.8;max-width:820px"></p>
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const SLUG="{{ calc.slug }}";
+  const cv=$("product-x-plus-a-x-plus-b-canvas"), ctx=cv.getContext("2d");
+  let last=null, frames=[], fi=0, raf=null, playing=false, mode="direct";
+  // Convert ^2,^3,... and _1 etc. to Unicode for canvas text (MathJax handles the steps panel).
+  function supr(str){
+    if(str==null) return "";
+    const sup={"0":"\u2070","1":"\u00b9","2":"\u00b2","3":"\u00b3","4":"\u2074","5":"\u2075","6":"\u2076","7":"\u2077","8":"\u2078","9":"\u2079"};
+    return String(str).replace(/\^(\{[^}]+\}|\d+)/g, function(_,g){
+      const digits=g.replace(/[{}]/g,"");
+      return digits.split("").map(d=>sup[d]||d).join("");
+    }).replace(/\\,/g,"").replace(/\\;/g,"").replace(/\\checkmark/g,"\u2713").replace(/\\text\{([^}]*)\}/g,"$1");
+  }
+  function S(){ return window.NCSkin||{}; }
+
+  function renderLaw(d){
+    const el=$("product-x-plus-a-x-plus-b-law"); if(!el) return;
+    if(!d||!d.identity){ el.innerHTML=""; return; }
+    const sk=S(); el.innerHTML='<b>Identity:</b> '+d.identity; el.style.color=sk.inkSoft||"";
+    el.querySelectorAll("b").forEach(b=>{b.style.color=sk.ink||"";});
+    if(window.MathJax&&MathJax.typesetPromise) MathJax.typesetPromise([el]);
+  }
+  function styleFields(){
+    const panel=document.querySelector('.viz-panel[data-slug="'+SLUG+'"]'); if(!panel||!window.NCSkin) return;
+    const bg=NCSkin.paper2||"transparent";
+    panel.querySelectorAll("input, select, button").forEach(el=>{ el.style.background=bg; el.style.color=NCSkin.ink; el.style.border="1px solid "+NCSkin.rule; el.style.borderRadius="6px"; el.style.padding="5px 7px"; });
+    panel.querySelectorAll("label").forEach(el=>{ el.style.color=NCSkin.ink; });
+    const n=$("product-x-plus-a-x-plus-b-anim-note"); if(n) n.style.color=NCSkin.inkSoft;
+    const d=$("product-x-plus-a-x-plus-b-disc"); if(d){ d.style.background=NCSkin.paper2; d.style.color=NCSkin.inkSoft; d.style.border="1px solid "+NCSkin.rule; }
+  }
+
+  function buildFrames(){ frames=[]; if(!last) return;
+
+    var nt = (last.terms||[]).length;
+    for(var k=1;k<=nt;k++){ frames.push({reveal:k}); }
+    if(!frames.length) frames.push({reveal:0});
+
+  }
+  function draw(){
+    const sk=S();
+    const ink=sk.ink||"#222", soft=sk.inkSoft||"#888", acc=sk.accent||"#b34a23",
+          yes=sk.yes||"#2e7d32", warn="#e0a300", rule=sk.rule||"#ccc",
+          paper=sk.paper2||"#f4efe6", mono=sk.mono||"monospace", sans=sk.sans||"sans-serif";
+    const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H);
+    const fr=frames[fi]||null;
+
+    if(!last||!last.terms){ return; }
+    const terms=last.terms;  // [{tex, val}]
+    const reveal=fr?fr.reveal:(terms.length);
+    ctx.fillStyle=ink; ctx.font="600 15px "+sans; ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+    ctx.fillText(supr(last.expand_title||"Expansion"), 30, 40);
+    // draw revealed terms as chips
+    let x=30, y=80; const lh=46;
+    for(let i=0;i<terms.length;i++){
+      const shown=(i<reveal);
+      const t=terms[i];
+      const label=supr(t.tex)+" = "+t.val;
+      ctx.font="14px "+mono; const wpx=ctx.measureText(label).width+24;
+      if(x+wpx>cv.width-30){ x=30; y+=lh; }
+      ctx.globalAlpha=shown?1:0.18;
+      ctx.fillStyle=shown?(i===reveal-1?acc:paper):paper; ctx.strokeStyle=rule; ctx.lineWidth=1;
+      ctx.fillRect(x,y,wpx,34); ctx.strokeRect(x,y,wpx,34);
+      ctx.fillStyle=shown?(i===reveal-1?paper:ink):soft; ctx.font="13px "+mono; ctx.textAlign="left"; ctx.textBaseline="middle";
+      ctx.fillText(label, x+12, y+17);
+      x+=wpx+12;
+    }
+    // running total
+    if(reveal>=terms.length){
+      ctx.fillStyle=yes; ctx.font="600 16px "+sans; ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+      ctx.fillText("Sum of terms = "+last.rhs_val+"   and   "+supr(last.lhs_label)+" = "+last.lhs_val+"   \u2713 equal", 30, y+78);
+    } else {
+      let partial=0; for(let i=0;i<reveal;i++) partial+=terms[i].num;
+      ctx.fillStyle=soft; ctx.font="14px "+sans; ctx.textAlign="left"; ctx.fillText("running total: "+ (Math.round(partial*1000)/1000), 30, y+78);
+    }
+    $("product-x-plus-a-x-plus-b-cap").textContent="Each box is one term of the expansion with its numeric value; the running total builds the right-hand side.";
+
+    const info=$("product-x-plus-a-x-plus-b-frameinfo"); if(info) info.textContent="Step "+(fi+1)+" / "+Math.max(1,frames.length);
+  }
+
+  function stop(){ if(raf){clearInterval(raf);raf=null;} playing=false; const b=$("product-x-plus-a-x-plus-b-play"); if(b)b.textContent="\u25B6 Play"; }
+  function play(){ stop(); if(fi>=frames.length-1) fi=0; playing=true; const b=$("product-x-plus-a-x-plus-b-play"); if(b)b.textContent="\u23F8 Pause";
+    raf=setInterval(()=>{ if(fi<frames.length-1){fi++;draw();} else stop(); }, 1100); }
+  function stepOne(){ stop(); if(fi<frames.length-1){fi++;draw();} }
+  function resetA(){ stop(); fi=0; draw(); }
+
+  function stepsPanel(){ return document.getElementById("nc-steps"); }
+  function styleToggle(){
+    if(!window.NCSkin) return; const seg=$("product-x-plus-a-x-plus-b-learn3"); seg.style.border="1px solid "+NCSkin.rule;
+    seg.querySelectorAll("button").forEach(b=>{ const on=b.classList.contains("active");
+      b.style.cursor="pointer"; b.style.border="none"; b.style.padding="6px 14px"; b.style.font="13px "+(NCSkin.sans||"sans-serif");
+      b.style.background=on?NCSkin.accent:(NCSkin.paper2||"transparent"); b.style.color=on?(NCSkin.paper||"#fff"):NCSkin.ink; });
+    ["product-x-plus-a-x-plus-b-play","product-x-plus-a-x-plus-b-stepbtn","product-x-plus-a-x-plus-b-reset"].forEach(id=>{ const pb=$(id); if(pb){ pb.style.border="1px solid "+NCSkin.rule; pb.style.background=NCSkin.paper2||"transparent"; pb.style.color=NCSkin.ink; } });
+  }
+  const ANIM_NOTE="Each term of the expanded product appears with its numeric value, building the right-hand side until it matches the product on the left - verified for your numbers.";
+  function setMode(m){
+    mode=m; stop();
+    const seg=$("product-x-plus-a-x-plus-b-learn3");
+    seg.querySelectorAll("button").forEach(b=>{ const on=b.getAttribute("data-mode")===m; b.classList.toggle("active",on); b.setAttribute("aria-pressed",String(on)); });
+    const sp=stepsPanel(), animCtl=$("product-x-plus-a-x-plus-b-anim-controls");
+    if(sp) sp.style.display=(m==="steps")?"":"none";
+    if(m==="steps" && sp){ sp.hidden=false; sp.style.display=""; const wbtn=document.getElementById("nc-steps-working"); if(wbtn) wbtn.click(); }
+    animCtl.style.display=(m==="anim")?"":"none";
+    if(m==="anim"){ $("product-x-plus-a-x-plus-b-anim-note").textContent=ANIM_NOTE; fi=0; draw(); }
+    if(m==="direct"){ fi=frames.length?frames.length-1:0; draw(); }
+    if(m==="steps"){ fi=frames.length?frames.length-1:0; draw(); }
+    styleToggle();
+  }
+
+  async function update(){
+    const body=collectInputs();
+    let data;
+    try{ const r=await fetch("/api/compute/"+SLUG,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); data=await r.json(); }
+    catch(e){ $("viz-out").textContent="compute error"; return; }
+    try{ if(window.NCSteps) NCSteps.render(data.steps||[]); }catch(e){}
+    if(data.disclaimer) $("product-x-plus-a-x-plus-b-disc").textContent="\u26A0 "+data.disclaimer;
+    renderLaw(data);
+    if(data.error){ $("viz-out").innerHTML="<b>"+data.error+"</b>"; last=null; ctx.clearRect(0,0,cv.width,cv.height); return; }
+    const sk=S();
+    let outHtml='<div style="line-height:1.8"><b>'+data.result+'</b>';
+    if(data.verified){ outHtml+=' <span style="color:'+(sk.yes||"#2e7d32")+';font-weight:600">&#10003; verified numerically</span>'; }
+    outHtml+='</div>';
+    $("viz-out").innerHTML=outHtml;
+    if(window.MathJax&&MathJax.typesetPromise) MathJax.typesetPromise([$("viz-out"),$("product-x-plus-a-x-plus-b-law")]);
+    last=data; buildFrames(); fi=(mode==="anim")?0:(frames.length?frames.length-1:0);
+    draw();
+  }
+
+  $("product-x-plus-a-x-plus-b-run").addEventListener("click", ()=>{ update().then(()=>setMode(mode)); });
+  $("product-x-plus-a-x-plus-b-play").addEventListener("click", ()=>{ if(playing) stop(); else play(); });
+  $("product-x-plus-a-x-plus-b-stepbtn").addEventListener("click", stepOne);
+  $("product-x-plus-a-x-plus-b-reset").addEventListener("click", resetA);
+  $("product-x-plus-a-x-plus-b-learn3").querySelectorAll("button").forEach(b=>{ b.addEventListener("click", ()=>setMode(b.getAttribute("data-mode"))); });
+
+  window.addEventListener("nc-theme-change", styleFields);
+  window.addEventListener("nc-theme-change", styleToggle);
+  window.addEventListener("nc-theme-change", ()=>{ if(last){ renderLaw(last); draw(); } });
+
+  styleFields();
+  update().then(()=>{ const it=document.querySelector("#nc-steps .nc-steps-toggle"); if(it) it.style.display="none"; setMode("direct"); });
+
+  function collectInputs(){ return {x:parseFloat($("product-x-plus-a-x-plus-b-x").value), a:parseFloat($("product-x-plus-a-x-plus-b-a").value), b:parseFloat($("product-x-plus-a-x-plus-b-b").value)}; }
+})();
+</script>
