@@ -235,6 +235,7 @@ def sitemap(request: Request):
             "/about", "/contact", "/scholars", "/privacy", "/terms"]
     urls += [f"/section/{s['id']}" for s in registry.sections_sorted()]
     urls += [c.manifest["url"] for c in registry.REGISTRY.values()]
+    urls += [s.manifest["url"] for s in registry.all_scholars()]
     body = "".join(
         f"<url><loc>{base}{u}</loc>"
         f"<lastmod>{today}</lastmod>"
