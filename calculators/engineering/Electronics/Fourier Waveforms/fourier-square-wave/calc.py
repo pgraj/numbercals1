@@ -1,4 +1,4 @@
-"""Square Wave Fourier Series — Engineering > Electronics > Fourier Waveforms.
+﻿"""Square Wave Fourier Series â€” Engineering > Electronics > Fourier Waveforms.
 Interactive Fourier visualiser. All rendering is client-side in the viz template;
 compute() returns only static metadata (there is no server-side calculation)."""
 from core.registry import register
@@ -6,6 +6,7 @@ from core.registry import register
 
 @register(
     slug="fourier-square-wave",
+    scholar="joseph-fourier",
     name="Square Wave Fourier Series",
     section="engineering",
     topic="Electronics",
@@ -18,7 +19,7 @@ from core.registry import register
 def compute():
     # Pure-visualisation tool: the interactive canvas lives in the viz template.
     return {
-        "result": "Interactive Fourier visualiser — drag the sliders in the panel below.",
+        "result": "Interactive Fourier visualiser â€” drag the sliders in the panel below.",
         "steps": [],
         "disclaimer": "Educational visualiser. Values/waveforms are drawn client-side and may be imperfect; cross-check against authoritative software.",
     }

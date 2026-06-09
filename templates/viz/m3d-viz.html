@@ -1,0 +1,418 @@
+{# 3D Models of Numbers — shared self-contained viz.
+   One template renders all nine visualisers; each calc.py sets data-mode via
+   compute()'s "mode" field, fetched from /api/compute/<slug>. Three.js 3D,
+   themed from NumberCals tokens, with Play/Pause + auto-rotate. #}
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<style>
+#m3d-wrap{margin:8px 0 4px}
+#m3d-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.m3d-btn{background:var(--paper-3);color:var(--ink);border:1px solid var(--rule);
+  padding:8px 16px;border-radius:8px;cursor:pointer;font-family:var(--sans);
+  font-size:.9rem;transition:.15s}
+.m3d-btn:hover{border-color:var(--accent);color:var(--accent)}
+.m3d-btn.active{background:var(--accent);border-color:var(--accent);color:var(--paper-3);font-weight:600}
+#m3d-stage{width:100%;height:440px;border-radius:12px;border:1px solid var(--rule);
+  background:var(--paper-2)}
+#m3d-cap{color:var(--ink);font-size:.9rem;margin:10px 0 0;font-weight:600;text-align:center}
+.m3d-hint{color:var(--ink-soft);font-size:.78rem;margin:6px 0 0;text-align:center}
+#m3d-cards{margin:18px 0 4px;display:grid;gap:10px}
+.m3d-card{background:var(--paper-3);border:1px solid var(--rule);border-radius:10px;
+  padding:12px 16px;border-left:4px solid var(--accent)}
+.m3d-card h3{margin:0 0 4px;font-size:.92rem;color:var(--accent)}
+.m3d-card p{margin:0;color:var(--ink);font-size:.9rem;line-height:1.5}
+.m3d-card a{color:var(--accent);font-weight:600}
+</style>
+
+<div id="m3d-wrap">
+  <div id="m3d-controls">
+    <button class="m3d-btn active" id="m3d-play">Pause</button>
+    <button class="m3d-btn" id="m3d-rotate">Auto-rotate: on</button>
+    <button class="m3d-btn" id="m3d-reset">Reset view</button>
+  </div>
+  <div id="m3d-stage"></div>
+  <p id="m3d-cap"></p>
+  <p class="m3d-hint">Drag to rotate · scroll to zoom · right-drag to pan</p>
+</div>
+<div id="m3d-cards"></div>
+
+<script>
+(function(){
+  // Mode = the calculator's slug, taken from the URL (/calc/<slug>).
+  // Each 3D-model calculator's slug IS its mode (prime-spiral, euler-formula, ...).
+  // Falls back to a Jinja-provided mode, then to prime-spiral.
+  function slugFromPath(){
+    var m = (window.location.pathname || '').match(/\/calc\/([^\/?#]+)/);
+    return m ? m[1] : '';
+  }
+  var KNOWN = ['prime-spiral','factorial-spiral','euler-formula','morphing-surface',
+    'lorenz-attractor','fourier-series','collatz-trajectories','divisor-surface','pascal-terrain'];
+  var MODE = slugFromPath();
+  if(KNOWN.indexOf(MODE) === -1){ MODE = "{{ mode | default('prime-spiral') }}"; }
+  if(KNOWN.indexOf(MODE) === -1){ MODE = 'prime-spiral'; }
+
+  // ---- fetch this model's explanation cards and render them below the scene ----
+  (function loadCards(){
+    var box = document.getElementById('m3d-cards');
+    if(!box) return;
+    fetch('/api/compute/'+MODE, {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        var items = (d && d.explanation) || [];
+        box.innerHTML = items.map(function(c){
+          var h = c.heading ? '<h3>'+c.heading+'</h3>' : '';
+          // bodies are trusted (authored in our own calc files), so render as HTML
+          // to allow scholar links in the lineage card.
+          return '<div class="m3d-card">'+h+'<p>'+(c.body||'')+'</p></div>';
+        }).join('');
+      })
+      .catch(function(){ /* leave cards empty on failure */ });
+  })();
+  var stage = document.getElementById('m3d-stage');
+  var capEl = document.getElementById('m3d-cap');
+  var playing = true, autoRotate = true;
+
+  // ---- theme tokens ----
+  function skin(){
+    var c=getComputedStyle(document.documentElement);
+    var g=function(n){return c.getPropertyValue(n).trim();};
+    return {accent:g('--accent'),ink:g('--ink'),yes:g('--yes'),
+            inkSoft:g('--ink-soft'),rule:g('--rule')};
+  }
+  function hex(v,fb){v=(v||'').trim();return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v)?v:fb;}
+
+  // ---- maths helpers ----
+  function isPrime(n){ if(n<2)return false; if(n%2===0)return n===2;
+    for(var d=3;d*d<=n;d+=2){ if(n%d===0)return false;} return true; }
+  function numDivisors(n){ var c=0,d=1; for(;d*d<=n;d++){ if(n%d===0) c+=(d*d===n?1:2);} return c; }
+  function logFactorial(k){ var s=0; for(var i=2;i<=k;i++) s+=Math.log10(i); return s; }
+  function comb(n,k){ if(k<0||k>n)return 0; k=Math.min(k,n-k); var r=1;
+    for(var i=0;i<k;i++){ r=r*(n-i)/(i+1);} return r; }
+  function collatz(n){ var s=[n]; var guard=0;
+    while(n!==1 && guard++<2000){ n=(n%2===0)?n/2:3*n+1; s.push(n);} return s; }
+
+  // ---- Three.js scaffold ----
+  var renderer, scene, camera, root, animId, frame=0, frameMax=300, tick=0;
+  var drawFn=null, defaultCamZ=22;
+
+  function makeText(str, color){
+    // build a sprite label from a canvas (kept tiny; used sparingly)
+    var cv=document.createElement('canvas'); cv.width=256; cv.height=64;
+    var cx=cv.getContext('2d'); cx.fillStyle=color; cx.font='bold 40px sans-serif';
+    cx.textAlign='center'; cx.textBaseline='middle'; cx.fillText(str,128,32);
+    var tex=new THREE.CanvasTexture(cv);
+    var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true}));
+    sp.scale.set(4,1,1); return sp;
+  }
+
+  function init(){
+    stage.innerHTML='';
+    var W=stage.clientWidth||640, H=stage.clientHeight||440;
+    scene=new THREE.Scene();
+    camera=new THREE.PerspectiveCamera(50,W/H,0.1,4000);
+    renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    renderer.setSize(W,H); renderer.setPixelRatio(window.devicePixelRatio||1);
+    stage.appendChild(renderer.domElement);
+    scene.add(new THREE.AmbientLight(0xffffff,0.8));
+    var pl=new THREE.PointLight(0xffffff,0.7); pl.position.set(30,40,50); scene.add(pl);
+    root=new THREE.Group(); scene.add(root);
+    addOrbit(renderer.domElement);
+    buildMode();
+    loop();
+  }
+
+  // mouse rotate / zoom / pan (no OrbitControls in r128 build)
+  var camTheta=0.6, camPhi=1.05, camRadius=defaultCamZ, panX=0, panY=0;
+  function applyCamera(){
+    var x=camRadius*Math.sin(camPhi)*Math.cos(camTheta);
+    var y=camRadius*Math.cos(camPhi);
+    var z=camRadius*Math.sin(camPhi)*Math.sin(camTheta);
+    camera.position.set(x+panX,y+panY,z);
+    camera.lookAt(panX,panY,0);
+  }
+  function addOrbit(dom){
+    var dragging=false, btn=0, px=0, py=0;
+    dom.style.cursor='grab';
+    dom.addEventListener('pointerdown',function(e){dragging=true;btn=e.button;px=e.clientX;py=e.clientY;dom.style.cursor='grabbing';});
+    window.addEventListener('pointerup',function(){dragging=false;dom.style.cursor='grab';});
+    window.addEventListener('pointermove',function(e){
+      if(!dragging)return; var dx=e.clientX-px, dy=e.clientY-py; px=e.clientX; py=e.clientY;
+      if(btn===2){ panX-=dx*0.03; panY+=dy*0.03; }
+      else { camTheta-=dx*0.01; camPhi=Math.max(0.05,Math.min(Math.PI-0.05,camPhi-dy*0.01)); }
+    });
+    dom.addEventListener('wheel',function(e){e.preventDefault();
+      camRadius=Math.max(4,Math.min(2000,camRadius+e.deltaY*0.05));},{passive:false});
+    dom.addEventListener('contextmenu',function(e){e.preventDefault();});
+  }
+
+  function clearRoot(){ while(root.children.length) root.remove(root.children[0]); }
+
+  function loop(){
+    animId=requestAnimationFrame(loop);
+    if(playing){ tick++; if(drawFn) drawFn(); }
+    if(autoRotate) root.rotation.y+=0.0035;
+    applyCamera();
+    renderer.render(scene,camera);
+  }
+
+  // ============ MODE BUILDERS ============
+  function buildMode(){
+    clearRoot(); root.rotation.set(0,0,0); frame=0; tick=0;
+    var s=skin();
+    if(MODE==='prime-spiral')      buildPrime(s);
+    else if(MODE==='factorial-spiral') buildFactorial(s);
+    else if(MODE==='euler-formula')    buildEuler(s);
+    else if(MODE==='morphing-surface') buildSurface(s);
+    else if(MODE==='lorenz-attractor') buildLorenz(s);
+    else if(MODE==='fourier-series')   buildFourier(s);
+    else if(MODE==='collatz-trajectories') buildCollatz(s);
+    else if(MODE==='divisor-surface')  buildDivisor(s);
+    else if(MODE==='pascal-terrain')   buildPascal(s);
+    else buildPrime(s);
+  }
+
+  // 1) Prime spiral: golden-angle, r=sqrt(n), height=n (scaled), primes highlighted
+  function buildPrime(s){
+    camRadius=70; camPhi=1.15; defaultCamZ=70;
+    var LIMIT=2000, STEP=20, GA=Math.PI*(3-Math.sqrt(5));
+    var prime=new THREE.Color(hex(s.accent,'#b34a23'));
+    var comp =new THREE.Color(hex(s.inkSoft,'#999'));
+    var pPts=[], cPts=[];
+    for(var n=2;n<=LIMIT;n++){
+      var r=Math.sqrt(n), a=n*GA, z=(n/LIMIT)*40-20;
+      (isPrime(n)?pPts:cPts).push(r*Math.cos(a), z, r*Math.sin(a));
+    }
+    function geom(arr){ var g=new THREE.BufferGeometry();
+      g.setAttribute('position',new THREE.Float32BufferAttribute(arr,3)); return g; }
+    var cMat=new THREE.PointsMaterial({color:comp,size:0.5,transparent:true,opacity:.35});
+    var pMat=new THREE.PointsMaterial({color:prime,size:1.1});
+    var cAll=geom(cPts), pAll=geom(pPts);
+    var cObj=new THREE.Points(cAll,cMat), pObj=new THREE.Points(pAll,pMat);
+    root.add(cObj); root.add(pObj);
+    var totalP=pPts.length/3;
+    frameMax=Math.ceil(LIMIT/STEP);
+    drawFn=function(){
+      var f=(tick/2)%frameMax; var shownN=Math.min(2+Math.floor(f)*STEP,LIMIT);
+      // reveal by drawRange proportional to shownN
+      var pc=0,cc=0;
+      for(var n=2;n<=shownN;n++){ if(isPrime(n)) pc++; else cc++; }
+      cObj.geometry.setDrawRange(0,cc); pObj.geometry.setDrawRange(0,pc);
+      cap('Prime spiral — n \u2264 '+shownN+'  ·  primes shown: '+pc);
+    };
+  }
+
+  // 2) Factorial spiral: log10(n!) height, pi/6 angular step
+  function buildFactorial(s){
+    var NMAX=34, col=new THREE.Color(hex(s.accent,'#b34a23'));
+    // Scale the height so the tallest point fits a fixed span, then shift the
+    // whole spiral down so it is vertically centred on the origin (otherwise
+    // the top runs off the canvas as log10(n!) climbs).
+    var zMax=logFactorial(NMAX), H=22, zScale=H/zMax, zShift=H/2;
+    camRadius=26; camPhi=1.15; defaultCamZ=26;
+    var pts=[];
+    for(var k=0;k<=NMAX;k++){ var ang=k*(Math.PI/6), z=logFactorial(k)*zScale-zShift;
+      pts.push(new THREE.Vector3(Math.cos(ang)*3.5, z, Math.sin(ang)*3.5)); }
+    var lineGeo=new THREE.BufferGeometry().setFromPoints(pts);
+    var line=new THREE.Line(lineGeo,new THREE.LineBasicMaterial({color:new THREE.Color(hex(s.inkSoft,'#888'))}));
+    root.add(line);
+    var dotGeo=new THREE.SphereGeometry(0.16,16,16);
+    var dotMat=new THREE.MeshStandardMaterial({color:col,emissive:col.clone().multiplyScalar(0.2)});
+    var dots=[]; pts.forEach(function(p){ var m=new THREE.Mesh(dotGeo,dotMat); m.position.copy(p); m.visible=false; root.add(m); dots.push(m); });
+    frameMax=NMAX+1;
+    drawFn=function(){
+      var f=Math.floor((tick/6)%frameMax);
+      dots.forEach(function(m,i){ m.visible=i<=f; });
+      line.geometry.setDrawRange(0,f+1);
+      var lv=logFactorial(f); var digits=f>0?Math.floor(lv)+1:1;
+      cap('Factorial spiral — '+f+'! has '+digits+' digit'+(digits===1?'':'s')+'  (log\u2081\u2080 '+f+'! \u2248 '+lv.toFixed(2)+')');
+    };
+  }
+
+  // 3) Euler: helix x=theta, y=cos, z=sin; lands on -1 at pi
+  function buildEuler(s){
+    camRadius=16; camPhi=1.2; defaultCamZ=16;
+    var TURNS=3, N=600, col=new THREE.Color(hex(s.accent,'#b34a23'));
+    var full=[]; for(var i=0;i<N;i++){ var th=i/(N-1)*TURNS*2*Math.PI;
+      full.push(new THREE.Vector3(th*0.9-8, Math.cos(th)*2.4, Math.sin(th)*2.4)); }
+    var geo=new THREE.BufferGeometry().setFromPoints(full);
+    var line=new THREE.Line(geo,new THREE.LineBasicMaterial({color:col}));
+    root.add(line);
+    // mark e^(i*pi) = -1  (theta=pi -> cos=-1)
+    var markCol=new THREE.Color(hex(s.yes,'#2f7a52'));
+    var mark=new THREE.Mesh(new THREE.SphereGeometry(0.22,16,16),
+      new THREE.MeshStandardMaterial({color:markCol,emissive:markCol.clone().multiplyScalar(0.3)}));
+    mark.position.set(Math.PI*0.9-8,-2.4,0); root.add(mark);
+    root.add((function(){var sp=makeText('e^{i\u03c0} = -1',hex(s.yes,'#2f7a52'));sp.position.set(Math.PI*0.9-8,-3.4,0);return sp;})());
+    frameMax=N;
+    drawFn=function(){ var c=Math.floor((tick*1.5)%N)+1; line.geometry.setDrawRange(0,c);
+      var th=(c-1)/(N-1)*TURNS*2*Math.PI;
+      cap('Euler: e^{i\u03b8} = cos \u03b8 + i sin \u03b8  ·  \u03b8 = '+(th/Math.PI).toFixed(2)+'\u03c0'); };
+  }
+
+  // 4) Morphing surface: z = sin(r-t) e^(-r/6) + saddle cos t
+  function buildSurface(s){
+    camRadius=18; camPhi=1.0; defaultCamZ=18;
+    var G=48, span=6;
+    var geo=new THREE.PlaneGeometry(span*2,span*2,G-1,G-1);
+    var mat=new THREE.MeshStandardMaterial({color:new THREE.Color(hex(s.accent,'#b34a23')),
+      emissive:new THREE.Color(hex(s.accent,'#b34a23')).multiplyScalar(0.08),
+      side:THREE.DoubleSide,flatShading:false,wireframe:false,roughness:.6});
+    var mesh=new THREE.Mesh(geo,mat); mesh.rotation.x=-Math.PI/2; root.add(mesh);
+    var pos=geo.attributes.position;
+    frameMax=120;
+    drawFn=function(){
+      var t=((tick/2)%120)/120*2*Math.PI;
+      for(var i=0;i<pos.count;i++){
+        var x=pos.getX(i), y=pos.getY(i); var r=Math.sqrt(x*x+y*y);
+        var z=Math.sin(r-t)*Math.exp(-r/6)*2.2 + 0.15*(x*x-y*y)/9*Math.cos(t)*2.2;
+        pos.setZ(i,z);
+      }
+      pos.needsUpdate=true; geo.computeVertexNormals();
+      cap('z = sin(r \u2212 t)\u00b7e^{\u2212r/6} + saddle\u00b7cos t   ·   t = '+t.toFixed(2));
+    };
+  }
+
+  // 5) Lorenz attractor
+  function buildLorenz(s){
+    camRadius=70; camPhi=1.1; defaultCamZ=70;
+    var SIG=10,RHO=28,BETA=8/3,DT=0.01,STEPS=4000;
+    var P=[]; var x=0.1,y=0,z=0;
+    for(var i=0;i<STEPS;i++){ P.push(new THREE.Vector3((x)*1.2,(z-25)*1.2,(y)*1.2));
+      var dx=SIG*(y-x), dy=x*(RHO-z)-y, dz=x*y-BETA*z;
+      x+=DT*dx; y+=DT*dy; z+=DT*dz; }
+    var geo=new THREE.BufferGeometry().setFromPoints(P);
+    var line=new THREE.Line(geo,new THREE.LineBasicMaterial({color:new THREE.Color(hex(s.accent,'#b34a23'))}));
+    root.add(line);
+    var headCol=new THREE.Color(hex(s.yes,'#2f7a52'));
+    var head=new THREE.Mesh(new THREE.SphereGeometry(0.9,14,14),
+      new THREE.MeshStandardMaterial({color:headCol,emissive:headCol.clone().multiplyScalar(0.3)}));
+    root.add(head);
+    frameMax=Math.ceil(STEPS/25);
+    drawFn=function(){ var c=Math.min(Math.floor((tick*25))%STEPS+25,STEPS);
+      line.geometry.setDrawRange(0,c); head.position.copy(P[c-1]);
+      cap('Lorenz attractor  (\u03c3=10, \u03c1=28, \u03b2=8/3)  ·  step '+c); };
+  }
+
+  // 6) Fourier: odd harmonics stacked, running sum approaches square wave
+  function buildFourier(s){
+    camRadius=20; camPhi=1.0; defaultCamZ=20;
+    var NT=14, M=200, base=new THREE.Color(hex(s.inkSoft,'#888'));
+    var sumCol=new THREE.Color(hex(s.accent,'#b34a23'));
+    var harmLines=[], sumLine;
+    function buildUpto(upto){
+      harmLines.forEach(function(l){root.remove(l);}); harmLines=[];
+      if(sumLine) root.remove(sumLine);
+      var running=new Array(M).fill(0);
+      for(var h=0;h<upto;h++){
+        var k=2*h+1, pts=[];
+        for(var j=0;j<M;j++){ var th=j/(M-1)*2*Math.PI;
+          var w=(4/(Math.PI*k))*Math.sin(k*th); running[j]+=w;
+          pts.push(new THREE.Vector3(th*1.4-4.4, (h)*0.6, w*2)); }
+        var g=new THREE.BufferGeometry().setFromPoints(pts);
+        var l=new THREE.Line(g,new THREE.LineBasicMaterial({color:base,transparent:true,opacity:.55}));
+        root.add(l); harmLines.push(l);
+      }
+      var sp=[]; for(var j2=0;j2<M;j2++){ var th2=j2/(M-1)*2*Math.PI;
+        sp.push(new THREE.Vector3(th2*1.4-4.4, -1.2, running[j2]*2)); }
+      var sg=new THREE.BufferGeometry().setFromPoints(sp);
+      sumLine=new THREE.Line(sg,new THREE.LineBasicMaterial({color:sumCol,linewidth:2}));
+      root.add(sumLine);
+    }
+    frameMax=NT;
+    drawFn=function(){ var upto=Math.floor((tick/40)%NT)+1; buildUpto(upto);
+      cap('Fourier square wave — '+upto+' harmonic'+(upto===1?'':'s')+' summed (red)'); };
+  }
+
+  // 7) Collatz trajectories
+  function buildCollatz(s){
+    camRadius=120; camPhi=1.1; defaultCamZ=120;
+    var STARTS=60; var seqs=[]; var maxlen=0, maxval=0;
+    for(var n=2;n<2+STARTS;n++){ var sq=collatz(n); seqs.push(sq);
+      if(sq.length>maxlen)maxlen=sq.length; for(var i=0;i<sq.length;i++) if(sq[i]>maxval)maxval=sq[i]; }
+    var lines=[];
+    seqs.forEach(function(sq,idx){
+      var pts=[]; for(var i=0;i<sq.length;i++){
+        pts.push(new THREE.Vector3((idx-STARTS/2)*1.5, (sq[i]/maxval)*40, i*2-maxlen)); }
+      var g=new THREE.BufferGeometry().setFromPoints(pts);
+      var hue=idx/STARTS; var col=new THREE.Color().setHSL(0.05+hue*0.8,0.7,0.5);
+      var l=new THREE.Line(g,new THREE.LineBasicMaterial({color:col,transparent:true,opacity:.75}));
+      l.userData={len:sq.length}; root.add(l); lines.push(l);
+    });
+    frameMax=maxlen;
+    drawFn=function(){ var cutoff=Math.floor((tick/2)%maxlen)+1;
+      lines.forEach(function(l){ l.geometry.setDrawRange(0,Math.min(cutoff,l.userData.len)); });
+      cap('Collatz trajectories (first '+STARTS+' starts)  ·  steps revealed: '+cutoff); };
+  }
+
+  // 8) Divisor surface: d(n) over (n mod a, n//a) grid
+  function buildDivisor(s){
+    camRadius=46; camPhi=1.0; defaultCamZ=46;
+    var A=30,B=30,LIMIT=A*B;
+    var geo=new THREE.PlaneGeometry(B,A,B-1,A-1);
+    var mat=new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:.7});
+    var mesh=new THREE.Mesh(geo,mat); mesh.rotation.x=-Math.PI/2; root.add(mesh);
+    var pos=geo.attributes.position; var cols=new Float32Array(pos.count*3);
+    var Z=new Array(pos.count).fill(0), maxd=1;
+    // map grid vertex (col j in 0..B-1, row i in 0..A-1) to n
+    for(var i=0;i<A;i++) for(var j=0;j<B;j++){
+      var n=(j*A)+i+1; if(n>LIMIT) continue; var d=numDivisors(n);
+      var vi=i*B+j; Z[vi]=d; if(d>maxd)maxd=d;
+    }
+    var accent=new THREE.Color(hex(s.accent,'#b34a23')), pale=new THREE.Color(hex(s.paper2||'#eee','#eee'));
+    frameMax=A;
+    drawFn=function(){
+      var rows=Math.floor((tick/4)%A)+1;
+      for(var vi=0;vi<pos.count;vi++){
+        var row=Math.floor(vi/B);
+        var h=(row<rows)?Z[vi]*0.7:0;
+        pos.setZ(vi,h);
+        var f=Z[vi]/maxd; var c=pale.clone().lerp(accent,f);
+        cols[vi*3]=c.r; cols[vi*3+1]=c.g; cols[vi*3+2]=c.b;
+      }
+      pos.needsUpdate=true; geo.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));
+      geo.computeVertexNormals();
+      cap('Divisor-count surface d(n) — rows revealed: '+rows+'/'+A); };
+  }
+
+  // 9) Pascal terrain: log10(C(r,k)) as points
+  function buildPascal(s){
+    camRadius=34; camPhi=1.05; defaultCamZ=34;
+    var ROWS=20;
+    var accent=new THREE.Color(hex(s.accent,'#b34a23'));
+    var allPts=[];
+    for(var r=0;r<ROWS;r++) for(var k=0;k<=r;k++){
+      allPts.push({r:r,k:k,v:Math.log10(comb(r,k)+1)}); }
+    var geo=new THREE.BufferGeometry();
+    var arr=new Float32Array(allPts.length*3);
+    allPts.forEach(function(p,i){ arr[i*3]=(p.k-p.r/2)*1.6; arr[i*3+1]=p.v*2.2; arr[i*3+2]=p.r*1.6-ROWS; });
+    geo.setAttribute('position',new THREE.Float32BufferAttribute(arr,3));
+    var mat=new THREE.PointsMaterial({color:accent,size:0.7});
+    var obj=new THREE.Points(geo,mat); root.add(obj);
+    frameMax=ROWS;
+    drawFn=function(){ var upto=Math.floor((tick/8)%ROWS)+1;
+      var shown=0; for(var i=0;i<allPts.length;i++){ if(allPts[i].r<upto) shown++; }
+      obj.geometry.setDrawRange(0,shown);
+      cap('Pascal\u2019s triangle terrain — rows: '+upto+'/'+ROWS); };
+  }
+
+  function cap(t){ capEl.textContent=t; }
+
+  // ---- controls ----
+  document.getElementById('m3d-play').addEventListener('click',function(){
+    playing=!playing; this.textContent=playing?'Pause':'Play';
+    this.classList.toggle('active',playing);
+  });
+  document.getElementById('m3d-rotate').addEventListener('click',function(){
+    autoRotate=!autoRotate; this.textContent='Auto-rotate: '+(autoRotate?'on':'off');
+    this.classList.toggle('active',autoRotate);
+  });
+  document.getElementById('m3d-reset').addEventListener('click',function(){
+    camTheta=0.6; camPhi=1.05; camRadius=defaultCamZ; panX=0; panY=0; root.rotation.set(0,0,0); buildMode();
+  });
+
+  window.addEventListener('nc-theme-change',function(){ buildMode(); });
+
+  init();
+})();
+</script>

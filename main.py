@@ -82,6 +82,26 @@ def page_home(request: Request):
     )
 
 
+@app.get("/calculator/standard", response_class=HTMLResponse)
+def page_calculator_standard(request: Request):
+    return templates.TemplateResponse(
+        request, "calculator.html",
+        _ctx(mode="standard",
+             page_title=f"Standard Calculator · {branding.SITE_NAME}",
+             page_description="A free online standard calculator."),
+    )
+
+
+@app.get("/calculator/scientific", response_class=HTMLResponse)
+def page_calculator_scientific(request: Request):
+    return templates.TemplateResponse(
+        request, "calculator.html",
+        _ctx(mode="scientific",
+             page_title=f"Scientific Calculator · {branding.SITE_NAME}",
+             page_description="A free online scientific calculator."),
+    )
+
+
 @app.get("/about", response_class=HTMLResponse)
 def page_about(request: Request):
     return templates.TemplateResponse(
@@ -211,7 +231,8 @@ def sitemap(request: Request):
     import datetime
     base = str(request.base_url).rstrip("/")
     today = datetime.date.today().isoformat()
-    urls = ["/", "/about", "/contact", "/scholars", "/privacy", "/terms"]
+    urls = ["/", "/calculator/standard", "/calculator/scientific",
+            "/about", "/contact", "/scholars", "/privacy", "/terms"]
     urls += [f"/section/{s['id']}" for s in registry.sections_sorted()]
     urls += [c.manifest["url"] for c in registry.REGISTRY.values()]
     body = "".join(

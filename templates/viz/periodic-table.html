@@ -1,0 +1,406 @@
+{# Periodic Table — self-contained NumberCals viz.
+   Reads element data from /api/compute/periodic-table, renders an interactive
+   118-element grid, Organic/Inorganic/All filters, and a modal with a Three.js
+   3D Bohr-shell atom. Themed entirely from NumberCals CSS variables so it
+   follows light / sepia / dark. No external CSS; no NCLearn. #}
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<style>
+/* ---- all colours come from NumberCals theme tokens ---- */
+#pt-wrap{margin:8px 0 4px}
+#pt-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.pt-btn{background:var(--paper-3);color:var(--ink);border:1px solid var(--rule);
+  padding:8px 16px;border-radius:8px;cursor:pointer;font-family:var(--sans);
+  font-size:.9rem;transition:.15s}
+.pt-btn:hover{border-color:var(--accent);color:var(--accent)}
+.pt-btn.active{background:var(--accent);border-color:var(--accent);color:var(--paper-3);font-weight:600}
+#pt-note{color:var(--ink-soft);font-size:.85rem;margin:0 0 12px}
+
+#pt-scroll{overflow-x:auto;padding-bottom:8px}
+#pt-grid{display:grid;grid-template-columns:repeat(18,minmax(40px,1fr));
+  grid-auto-rows:minmax(44px,auto);gap:3px;min-width:860px;max-width:1180px}
+.pt-cell{position:relative;border:1px solid var(--rule);border-radius:5px;
+  background:var(--paper-3);padding:3px 2px;cursor:pointer;
+  display:flex;flex-direction:column;justify-content:space-between;min-height:44px;
+  border-left:4px solid var(--cellcol,var(--rule));
+  transition:transform .1s, box-shadow .1s, opacity .2s}
+.pt-cell:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.18);
+  border-color:var(--accent)}
+.pt-cell .pt-num{font-size:.58rem;color:var(--ink-soft);font-family:var(--mono)}
+.pt-cell .pt-sym{font-size:1rem;font-weight:700;line-height:1;color:var(--ink)}
+.pt-cell .pt-nm{font-size:.48rem;color:var(--ink-soft);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.pt-cell.pt-faded{opacity:.14;pointer-events:none}
+
+/* modal */
+#pt-overlay{position:fixed;inset:0;background:rgba(20,16,10,.55);
+  display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+#pt-overlay.pt-hidden{display:none}
+#pt-modal{background:var(--paper);border:1px solid var(--rule);border-radius:14px;
+  width:min(880px,96vw);max-height:92vh;overflow:auto;position:relative;
+  box-shadow:0 20px 60px rgba(0,0,0,.3)}
+#pt-close{position:absolute;top:8px;right:12px;background:none;border:none;
+  color:var(--ink);font-size:1.7rem;cursor:pointer;line-height:1}
+#pt-close:hover{color:var(--accent)}
+.pt-body{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:22px}
+@media(max-width:680px){.pt-body{grid-template-columns:1fr}}
+.pt-atom{display:flex;flex-direction:column;align-items:center}
+#pt-viewtoggle{display:flex;gap:6px;margin-bottom:8px}
+.pt-vt{background:var(--paper-3);color:var(--ink);border:1px solid var(--rule);
+  padding:5px 14px;border-radius:7px;cursor:pointer;font-family:var(--sans);
+  font-size:.82rem;transition:.15s}
+.pt-vt:hover{border-color:var(--accent);color:var(--accent)}
+.pt-vt.active{background:var(--accent);border-color:var(--accent);color:var(--paper-3);font-weight:600}
+.pt-vcap{color:var(--ink);font-size:.82rem;margin:8px 0 0;text-align:center;font-weight:600}
+#pt-viewer{width:100%;height:320px;border-radius:10px;border:1px solid var(--rule);
+  background:var(--paper-2)}
+.pt-hint{color:var(--ink-soft);font-size:.74rem;margin:8px 0 0}
+.pt-info h2{margin:.2rem 0;color:var(--ink)}
+.pt-badge{display:inline-block;background:var(--accent);color:var(--paper-3);
+  border-radius:7px;padding:2px 10px;font-weight:700;font-family:var(--mono);font-size:.85rem}
+.pt-bigsym{font-size:2.6rem;font-weight:800;margin:.2rem 0 .1rem;color:var(--ink)}
+.pt-swatch{display:inline-block;width:14px;height:14px;border-radius:3px;
+  border:1px solid var(--rule);vertical-align:middle;margin-right:6px}
+.pt-props{width:100%;border-collapse:collapse;margin:.4rem 0 .2rem}
+.pt-props th,.pt-props td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--rule);font-size:.88rem}
+.pt-props th{color:var(--ink-soft);font-weight:500;width:46%}
+.pt-props td{color:var(--ink)}
+.pt-info h3{margin:.8rem 0 .15rem;font-size:.92rem;color:var(--accent)}
+.pt-info p{margin:.1rem 0;color:var(--ink);font-size:.88rem;line-height:1.45}
+.pt-disc a{color:var(--accent);font-weight:600}
+</style>
+
+<div id="pt-wrap">
+  <div id="pt-controls">
+    <button class="pt-btn active" data-filter="all">All elements</button>
+    <button class="pt-btn" data-filter="organic">Organic</button>
+    <button class="pt-btn" data-filter="inorganic">Inorganic</button>
+  </div>
+  <p id="pt-note">Showing all 118 elements.</p>
+  <div id="pt-scroll"><div id="pt-grid" role="grid" aria-label="Periodic table"></div></div>
+</div>
+
+<div id="pt-overlay" class="pt-hidden">
+  <div id="pt-modal" role="dialog" aria-modal="true">
+    <button id="pt-close" aria-label="Close">&times;</button>
+    <div class="pt-body">
+      <div class="pt-atom">
+        <div id="pt-viewtoggle">
+          <button class="pt-vt active" data-view="atomic">Atomic structure</button>
+          <button class="pt-vt" data-view="molecular">Molecular structure</button>
+        </div>
+        <div id="pt-viewer"></div>
+        <p class="pt-vcap" id="pt-vcap"></p>
+        <p class="pt-hint" id="pt-hint">Drag to rotate · scroll to zoom · electron shells are accurate, orbit geometry is illustrative</p>
+      </div>
+      <div class="pt-info">
+        <div class="pt-badge" id="pt-mNum"></div>
+        <h2 id="pt-mName"></h2>
+        <div class="pt-bigsym" id="pt-mSym"></div>
+        <table class="pt-props">
+          <tr><th>Chemical formula (elemental)</th><td id="pt-mFormula"></td></tr>
+          <tr><th>Atomic weight</th><td id="pt-mMass"></td></tr>
+          <tr><th>Distinctive colour</th><td id="pt-mColour"></td></tr>
+          <tr><th>Category</th><td id="pt-mCat"></td></tr>
+          <tr><th>Period / Group</th><td id="pt-mPG"></td></tr>
+          <tr><th>Electron shells</th><td id="pt-mShells"></td></tr>
+          <tr><th>Classification</th><td id="pt-mOrg"></td></tr>
+        </table>
+        <p class="pt-disc" id="pt-mDisc"></p>
+        <h3>Where it is found</h3><p id="pt-mFound"></p>
+        <h3>Where it is used</h3><p id="pt-mUses"></p>
+        <h3>How it helps in daily life</h3><p id="pt-mDaily"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var ELEMENTS = [], curFilter = 'all';
+  var grid   = document.getElementById('pt-grid');
+  var note   = document.getElementById('pt-note');
+  var overlay= document.getElementById('pt-overlay');
+
+  // ---- load data via the calculator's compute endpoint ----
+  fetch('/api/compute/periodic-table', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'
+  }).then(function(r){return r.json();})
+    .then(function(d){ ELEMENTS = (d && d.elements) || []; build(); })
+    .catch(function(){ note.textContent = 'Could not load element data.'; });
+
+  function build(){
+    grid.innerHTML='';
+    ELEMENTS.forEach(function(el){
+      var c=document.createElement('div');
+      c.className='pt-cell';
+      c.style.gridColumn=el.col; c.style.gridRow=el.row;
+      c.style.setProperty('--cellcol', el.colour);
+      c.dataset.organic=el.organic;
+      c.innerHTML='<span class="pt-num">'+el.number+'</span>'+
+                  '<span class="pt-sym">'+el.symbol+'</span>'+
+                  '<span class="pt-nm">'+el.name+'</span>';
+      c.addEventListener('click', function(){ openEl(el); });
+      grid.appendChild(c);
+    });
+    applyFilter(curFilter);
+  }
+
+  // ---- filtering ----
+  document.querySelectorAll('.pt-btn').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('.pt-btn').forEach(function(x){x.classList.remove('active');});
+      b.classList.add('active');
+      curFilter=b.dataset.filter; applyFilter(curFilter);
+    });
+  });
+  function applyFilter(mode){
+    var n=0;
+    document.querySelectorAll('.pt-cell').forEach(function(c){
+      var org=c.dataset.organic==='true';
+      var show = mode==='all' || (mode==='organic'&&org) || (mode==='inorganic'&&!org);
+      c.classList.toggle('pt-faded', !show);
+      if(show) n++;
+    });
+    var lbl={all:'all 118 elements',organic:'organic-chemistry elements',inorganic:'inorganic elements'};
+    note.textContent='Showing '+n+' '+lbl[mode]+'.';
+  }
+
+  // ---- modal ----
+  function txt(id,v){ document.getElementById(id).textContent=v; }
+  function openEl(el){
+    txt('pt-mNum','#'+el.number);
+    txt('pt-mName',el.name);
+    txt('pt-mSym',el.symbol);
+    txt('pt-mFormula',el.formula);
+    txt('pt-mMass',el.mass+' u');
+    txt('pt-mCat',el.category);
+    txt('pt-mPG','Period '+el.period+' \u00b7 Group '+el.group);
+    txt('pt-mShells',el.shells.join(', '));
+    txt('pt-mOrg',el.organic?'Organic':'Inorganic');
+    txt('pt-mFound',el.found);
+    txt('pt-mUses',el.uses);
+    txt('pt-mDaily',el.daily);
+    // colour swatch
+    var col=document.getElementById('pt-mColour');
+    col.innerHTML='<span class="pt-swatch" style="background:'+el.colour+'"></span>'+el.colour;
+    // discoverer (clickable scholar link when one exists)
+    var disc=document.getElementById('pt-mDisc');
+    var who=el.discoverer, yr=el.discovery_year;
+    var line='Discovered by: <strong>'+who+'</strong>'+(yr&&yr!=='prehistory'?(' ('+yr+')'):'');
+    if(el.discoverer_slug){
+      line='Discovered by: <a href="/scholar/'+el.discoverer_slug+'"><strong>'+who+'</strong></a>'+
+           (yr&&yr!=='prehistory'?(' ('+yr+')'):'');
+    }
+    disc.innerHTML=line;
+    overlay.classList.remove('pt-hidden');
+    curEl=el;
+    setView(curView);
+  }
+  function closeModal(){ overlay.classList.add('pt-hidden'); stopAtom(); }
+  document.getElementById('pt-close').addEventListener('click', closeModal);
+  overlay.addEventListener('click', function(e){ if(e.target===overlay) closeModal(); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeModal(); });
+
+  // ---- Atomic / Molecular view toggle ----
+  var curEl=null, curView='atomic';
+  document.querySelectorAll('.pt-vt').forEach(function(b){
+    b.addEventListener('click', function(){ setView(b.dataset.view); });
+  });
+  function setView(v){
+    curView=v;
+    document.querySelectorAll('.pt-vt').forEach(function(b){
+      b.classList.toggle('active', b.dataset.view===v);
+    });
+    if(!curEl) return;
+    if(v==='molecular') buildScene(curEl,'molecular');
+    else buildScene(curEl,'atomic');
+  }
+
+  // ---- 3D scene (Three.js), themed from NumberCals tokens ----
+  var renderer, scene, camera, animId, animFns=[];
+  function skin(){
+    var c=getComputedStyle(document.documentElement);
+    var g=function(n){return c.getPropertyValue(n).trim();};
+    return {accent:g('--accent'), ink:g('--ink'), yes:g('--yes'), paper2:g('--paper-2')};
+  }
+  function hex(v,fb){ v=(v||'').trim(); return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v)?v:fb; }
+
+  // Parse an elemental formula like "H2", "O2", "S8", "He", "Fe" -> {sym, count}.
+  function parseFormula(f){
+    var m=/^([A-Z][a-z]?)(\d*)$/.exec((f||'').trim());
+    if(!m) return {sym:(f||'?'), count:1};
+    return {sym:m[1], count: m[2]? parseInt(m[2],10) : 1};
+  }
+
+  // Build the renderer + camera + lights + drag/zoom once, then draw into root.
+  function buildScene(el, mode){
+    stopAtom();
+    var host=document.getElementById('pt-viewer'); host.innerHTML='';
+    var W=host.clientWidth||360, H=host.clientHeight||320;
+    scene=new THREE.Scene();
+    camera=new THREE.PerspectiveCamera(55,W/H,0.1,1000); camera.position.set(0,0,14);
+    renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    renderer.setSize(W,H); renderer.setPixelRatio(window.devicePixelRatio||1);
+    host.appendChild(renderer.domElement);
+    scene.add(new THREE.AmbientLight(0xffffff,0.75));
+    var pl=new THREE.PointLight(0xffffff,0.85); pl.position.set(10,10,15); scene.add(pl);
+
+    var root=new THREE.Group(); scene.add(root);
+    animFns=[];
+    if(mode==='molecular') drawMolecular(el, root);
+    else drawAtomic(el, root);
+
+    // shared drag-to-rotate + scroll-to-zoom
+    var dom=renderer.domElement, dragging=false, px=0, py=0;
+    dom.style.cursor='grab';
+    dom.onpointerdown=function(e){dragging=true;px=e.clientX;py=e.clientY;dom.style.cursor='grabbing';};
+    window.addEventListener('pointerup', ptUp);
+    window.addEventListener('pointermove', ptMove);
+    function ptUp(){dragging=false; if(dom) dom.style.cursor='grab';}
+    function ptMove(e){ if(!dragging)return;
+      root.rotation.y+=(e.clientX-px)*0.01; root.rotation.x+=(e.clientY-py)*0.01;
+      px=e.clientX; py=e.clientY; }
+    dom.onwheel=function(e){e.preventDefault();
+      camera.position.z=Math.max(6,Math.min(34,camera.position.z+e.deltaY*0.01));};
+    renderer._cleanup=function(){ window.removeEventListener('pointerup',ptUp);
+      window.removeEventListener('pointermove',ptMove); };
+
+    (function animate(){
+      animId=requestAnimationFrame(animate);
+      animFns.forEach(function(fn){ fn(); });
+      root.rotation.y+=0.002;
+      renderer.render(scene,camera);
+    })();
+  }
+
+  // ---- Atomic view: nucleus + orbiting electron shells (Bohr model) ----
+  function drawAtomic(el, root){
+    var s=skin();
+    var nucCol=new THREE.Color(hex(el.colour,'#b34a23'));
+    var accent=new THREE.Color(hex(s.accent,'#b34a23'));
+    var elecCol=new THREE.Color(hex(s.yes,'#2f7a52'));
+    var nSize=0.9+Math.min(el.number,60)/60;
+    root.add(new THREE.Mesh(
+      new THREE.SphereGeometry(nSize,32,32),
+      new THREE.MeshStandardMaterial({color:nucCol,emissive:nucCol.clone().multiplyScalar(0.18),roughness:.45})
+    ));
+    el.shells.forEach(function(count,i){
+      var radius=nSize+1.6+i*1.5;
+      var ring=new THREE.Mesh(
+        new THREE.TorusGeometry(radius,0.015,8,90),
+        new THREE.MeshBasicMaterial({color:accent,transparent:true,opacity:.4})
+      );
+      ring.rotation.x=Math.PI/2+i*0.3; ring.rotation.y=i*0.4; root.add(ring);
+      var g=new THREE.Group(); g.rotation.x=ring.rotation.x; g.rotation.y=ring.rotation.y;
+      for(var e=0;e<count;e++){
+        var a=(e/count)*Math.PI*2;
+        var m=new THREE.Mesh(
+          new THREE.SphereGeometry(0.16,16,16),
+          new THREE.MeshStandardMaterial({color:elecCol,emissive:elecCol.clone().multiplyScalar(0.25)})
+        );
+        m.position.set(Math.cos(a)*radius,Math.sin(a)*radius,0);
+        m.userData={a:a,radius:radius,speed:0.6/(i+1)};
+        g.add(m);
+      }
+      root.add(g);
+      animFns.push(function(){
+        g.children.forEach(function(m){
+          m.userData.a+=m.userData.speed*0.02;
+          var r=m.userData.radius,a=m.userData.a;
+          m.position.set(Math.cos(a)*r,Math.sin(a)*r,0);
+        });
+      });
+    });
+    setCaption('Single atom: nucleus + '+el.shells.length+
+               ' electron shell'+(el.shells.length===1?'':'s')+' ('+el.shells.join(', ')+')',
+               'Drag to rotate \u00b7 scroll to zoom \u00b7 shells accurate, orbits illustrative');
+  }
+
+  // ---- Molecular view: how the atoms join in the element's natural form ----
+  function drawMolecular(el, root){
+    var s=skin();
+    var atomCol=new THREE.Color(hex(el.colour,'#b34a23'));
+    var bondCol=new THREE.Color(hex(s.ink||'#444','#666'));
+    var fp=parseFormula(el.formula);
+    var n=fp.count;
+    var R=1.1; // atom radius for molecule balls
+    var mat=new THREE.MeshStandardMaterial({color:atomCol,
+              emissive:atomCol.clone().multiplyScalar(0.16),roughness:.5});
+    function ball(x,y,z){
+      var m=new THREE.Mesh(new THREE.SphereGeometry(R,28,28), mat);
+      m.position.set(x,y,z); root.add(m); return m;
+    }
+    function bond(p1,p2){
+      var dir=new THREE.Vector3().subVectors(p2,p1);
+      var len=dir.length();
+      var cyl=new THREE.Mesh(
+        new THREE.CylinderGeometry(0.16,0.16,len,12),
+        new THREE.MeshStandardMaterial({color:bondCol,roughness:.6})
+      );
+      cyl.position.copy(p1).add(p2).multiplyScalar(0.5);
+      cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.clone().normalize());
+      root.add(cyl);
+    }
+    var cap, hint='Drag to rotate \u00b7 scroll to zoom';
+
+    if(n===1){
+      // monatomic: single sphere (noble gases) or one lattice node (metals)
+      ball(0,0,0);
+      var metallic = /metal/i.test(el.category);
+      if(metallic){
+        // hint at a metallic lattice with faint neighbour nodes
+        var faint=new THREE.MeshStandardMaterial({color:atomCol,transparent:true,opacity:.28,roughness:.6});
+        [[2.6,0,0],[-2.6,0,0],[0,2.6,0],[0,-2.6,0],[0,0,2.6],[0,0,-2.6]].forEach(function(p){
+          var m=new THREE.Mesh(new THREE.SphereGeometry(R*0.9,20,20),faint);
+          m.position.set(p[0],p[1],p[2]); root.add(m);
+        });
+        cap=el.symbol+': a metal \u2014 atoms pack into a repeating lattice (one node shown solid, neighbours faded), not separate molecules.';
+      } else {
+        cap=el.formula+': a single, unbonded atom \u2014 noble gases travel alone.';
+      }
+    } else if(n===2){
+      // diatomic: two bonded atoms
+      var a=ball(-1.5,0,0), b=ball(1.5,0,0);
+      bond(a.position,b.position);
+      cap=el.formula+': two '+el.name.toLowerCase()+' atoms share a covalent bond \u2014 the form found in nature.';
+    } else if(fp.sym==='S' && n===8){
+      // S8 crown ring
+      var pts=[];
+      for(var i=0;i<8;i++){
+        var ang=(i/8)*Math.PI*2, rr=2.6, zz=(i%2? 0.5 : -0.5);
+        pts.push(ball(Math.cos(ang)*rr, Math.sin(ang)*rr, zz).position);
+      }
+      for(var j=0;j<8;j++) bond(pts[j], pts[(j+1)%8]);
+      cap='S8: eight sulfur atoms join in a puckered crown-shaped ring \u2014 the natural form of sulfur.';
+    } else {
+      // generic ring for any other polyatomic
+      var p2=[];
+      for(var k=0;k<n;k++){
+        var an=(k/n)*Math.PI*2, r2=2.4;
+        p2.push(ball(Math.cos(an)*r2, Math.sin(an)*r2, 0).position);
+      }
+      for(var q=0;q<n;q++) bond(p2[q], p2[(q+1)%n]);
+      cap=el.formula+': '+n+' atoms bonded together in the element\u2019s natural form.';
+    }
+    setCaption(cap, hint);
+  }
+
+  function setCaption(cap, hint){
+    var c=document.getElementById('pt-vcap'); if(c) c.textContent=cap;
+    var h=document.getElementById('pt-hint'); if(h) h.textContent=hint;
+  }
+
+  function stopAtom(){
+    if(animId) cancelAnimationFrame(animId); animId=null;
+    animFns=[];
+    if(renderer){ if(renderer._cleanup) renderer._cleanup(); renderer.dispose(); renderer=null; }
+  }
+
+  // re-render on theme change if a modal is open (picks up new accent/ink)
+  window.addEventListener('nc-theme-change', function(){
+    if(!overlay.classList.contains('pt-hidden') && curEl) setView(curView);
+  });
+})();
+</script>

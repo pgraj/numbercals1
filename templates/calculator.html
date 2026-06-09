@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ "Scientific" if mode == "scientific" else "Standard" }} Calculator · {{ site_name }}{% endblock %}
+{% block description %}A free online {{ "scientific" if mode == "scientific" else "standard" }} calculator from {{ site_name }}.{% endblock %}
+
+{% block content %}
+<p class="eyebrow">// calculator</p>
+<h1>{{ "Scientific" if mode == "scientific" else "Standard" }} Calculator</h1>
+
+<div class="calc-shell" id="sci-calc">
+  <div class="calc-display" id="calc-display">0</div>
+  <div class="calc-mode">
+    <button id="mode-standard">standard</button>
+    <button id="mode-scientific" class="op">scientific</button>
+  </div>
+  <div class="keys scientific" id="calc-keys"></div>
+</div>
+
+<script src="/static/calc.js"></script>
+<script>
+// Apply the requested mode before first paint (no visible jump).
+// Priority: the route's {{ mode }}, then any ?calc= query override.
+(function(){
+  try {
+    var mode = {{ mode | tojson }};
+    var q = new URLSearchParams(window.location.search).get('calc');
+    if (q === 'standard' || q === 'scientific') mode = q;
+    if (mode !== 'standard' && mode !== 'scientific') return;
+    var btn = document.getElementById('mode-' + mode);
+    if (btn) btn.click();
+  } catch(e){}
+})();
+</script>
+{% endblock %}
