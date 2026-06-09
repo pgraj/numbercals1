@@ -1,4 +1,4 @@
-﻿"""Heat Equation â€” Fourier's 1822 Problem â€” Engineering > Electronics > Applications of Fourier.
+"""Heat Equation — Fourier's 1822 Problem — Engineering > Electronics > Applications of Fourier.
 Interactive Fourier visualiser. All rendering is client-side in the viz template;
 compute() returns only static metadata (there is no server-side calculation)."""
 from core.registry import register
@@ -7,7 +7,7 @@ from core.registry import register
 @register(
     slug="fourier-heat-equation",
     scholar="joseph-fourier",
-    name="Heat Equation â€” Fourier's 1822 Problem",
+    name="Heat Equation — Fourier's 1822 Problem",
     section="engineering",
     topic="Electronics",
     sub="Applications of Fourier",
@@ -19,7 +19,7 @@ from core.registry import register
 def compute():
     # Pure-visualisation tool: the interactive canvas lives in the viz template.
     return {
-        "result": "Interactive Fourier visualiser â€” drag the sliders in the panel below.",
+        "result": "Interactive Fourier visualiser — drag the sliders in the panel below.",
         "steps": [],
         "disclaimer": "Educational visualiser. Values/waveforms are drawn client-side and may be imperfect; cross-check against authoritative software.",
     }

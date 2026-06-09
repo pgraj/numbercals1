@@ -223,7 +223,8 @@ def healthz():
 
 @app.get("/robots.txt", response_class=PlainTextResponse)
 def robots():
-    return "User-agent: *\nDisallow: /api/\nDisallow: /healthz\nSitemap: /sitemap.xml\n"
+    return ("User-agent: *\nDisallow: /api/\nDisallow: /healthz\n"
+            "Sitemap: https://numbercals.com/sitemap.xml\n")
 
 
 @app.get("/sitemap.xml")
