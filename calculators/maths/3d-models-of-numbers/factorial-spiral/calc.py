@@ -30,6 +30,6 @@ def compute(**kwargs):
             {"heading": "Who uses it", "body": 'Statisticians, data scientists, delivery and logistics planners.'},
             {"heading": "What it is for", "body": 'Counting the number of possible arrangements and combinations.'},
             {"heading": "How it helps people", "body": 'Lottery odds, planning the shortest delivery routes, and apps that recommend videos or songs.'},
-            {"heading": "Going deeper", "body": 'Factorials sit inside permutations, combinations and probability - the foundation of statistics and risk. (Yr 10-12)'},
+            {"heading": "Going deeper", "body": 'Factorials sit inside permutations, combinations and probability - the foundation of statistics and risk. (Senior secondary and above)'},
         ],
     }

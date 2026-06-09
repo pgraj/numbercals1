@@ -31,6 +31,6 @@ def compute(**kwargs):
             {"heading": "Who uses it", "body": 'Electrical, audio and telecommunications engineers; physicists.'},
             {"heading": "What it is for", "body": 'Turning waves and wobbles into neat spinning arrows that are easy to calculate with.'},
             {"heading": "How it helps people", "body": 'The electricity in your home, mobile signals, Wi-Fi and music streaming all rely on it.'},
-            {"heading": "Going deeper", "body": 'e^(iθ) = cos θ + i sin θ links exponentials to circular motion; at θ = π it gives e^(iπ) + 1 = 0, often called the most beautiful equation in mathematics. (Yr 11-12)'},
+            {"heading": "Going deeper", "body": 'e^(iθ) = cos θ + i sin θ links exponentials to circular motion; at θ = π it gives e^(iπ) + 1 = 0, often called the most beautiful equation in mathematics. (Senior secondary and above)'},
         ],
     }

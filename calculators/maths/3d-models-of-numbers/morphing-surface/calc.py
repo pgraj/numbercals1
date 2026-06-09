@@ -30,6 +30,6 @@ def compute(**kwargs):
             {"heading": "Who uses it", "body": 'Architects, engineers, 3D animators, mapmakers.'},
             {"heading": "What it is for", "body": 'Designing shapes and modelling how things bend, stretch or flow.'},
             {"heading": "How it helps people", "body": 'Safer bridges and buildings, accurate maps and weather models, and the worlds you see in films and games.'},
-            {"heading": "Going deeper", "body": 'z = f(x, y) lets two inputs control a height - how 3D modelling and multivariable thinking begin. (Yr 10-12)'},
+            {"heading": "Going deeper", "body": 'z = f(x, y) lets two inputs control a height - how 3D modelling and multivariable thinking begin. (Senior secondary and above)'},
         ],
     }

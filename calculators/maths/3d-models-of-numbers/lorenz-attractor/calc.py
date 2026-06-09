@@ -31,6 +31,6 @@ def compute(**kwargs):
             {"heading": "Who uses it", "body": 'Weather forecasters, climate scientists, engineers, biologists.'},
             {"heading": "What it is for", "body": 'Understanding systems that are sensitive and hard to predict.'},
             {"heading": "How it helps people", "body": 'Better weather and climate models, and tools for studying things like heart rhythms.'},
-            {"heading": "Going deeper", "body": 'The Lorenz system is three linked equations whose solution never repeats - a famous example of deterministic chaos. (Yr 11-12)'},
+            {"heading": "Going deeper", "body": 'The Lorenz system is three linked equations whose solution never repeats - a famous example of deterministic chaos. (Senior secondary and above)'},
         ],
     }

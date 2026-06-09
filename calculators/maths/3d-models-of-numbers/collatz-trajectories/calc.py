@@ -31,6 +31,6 @@ def compute(**kwargs):
             {"heading": "Who uses it", "body": 'Mathematicians and computer scientists exploring patterns.'},
             {"heading": "What it is for", "body": 'Studying simple rules that produce surprisingly complex behaviour.'},
             {"heading": "How it helps people", "body": 'It teaches algorithmic thinking and shows that maths still has unsolved mysteries waiting to be cracked.'},
-            {"heading": "Going deeper", "body": 'Despite a rule simple enough for a Year 5 student, the Collatz conjecture remains unproven. (Yr 9-12)'},
+            {"heading": "Going deeper", "body": 'Despite a rule simple enough to state in one sentence, the Collatz conjecture remains unproven. (Senior secondary and above)'},
         ],
     }

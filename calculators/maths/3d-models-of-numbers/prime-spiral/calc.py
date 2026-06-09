@@ -30,6 +30,6 @@ def compute(**kwargs):
             {"heading": "Who uses it", "body": 'Cryptographers, cybersecurity and software engineers, banks.'},
             {"heading": "What it is for", "body": 'Locking and unlocking the secret codes that protect information.'},
             {"heading": "How it helps people", "body": 'Every time you bank online, send a private message, or buy something, primes quietly keep it safe.'},
-            {"heading": "Going deeper", "body": 'RSA encryption multiplies two huge primes together; its security comes from how hard it is to factor that product back. (Yr 10-12)'},
+            {"heading": "Going deeper", "body": 'RSA encryption multiplies two huge primes together; its security comes from how hard it is to factor that product back. (Senior secondary and above)'},
         ],
     }

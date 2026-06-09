@@ -30,6 +30,6 @@ def compute(**kwargs):
             {"heading": "Who uses it", "body": 'Cryptographers, computer scientists, engineers designing gears and schedules.'},
             {"heading": "What it is for", "body": 'Encryption, error-correcting codes, and anything with cycles or repetition.'},
             {"heading": "How it helps people", "body": 'Reliable data storage, secure communication, and the timing behind clocks, calendars and machines.'},
-            {"heading": "Going deeper", "body": 'The number of divisors of n depends on its prime factorisation - linking back to the prime spiral. (Yr 9-12)'},
+            {"heading": "Going deeper", "body": 'The number of divisors of n depends on its prime factorisation - linking back to the prime spiral. (Senior secondary and above)'},
         ],
     }

@@ -31,6 +31,6 @@ def compute(**kwargs):
             {"heading": "Who uses it", "body": 'Audio engineers, medical-imaging specialists, phone and camera engineers.'},
             {"heading": "What it is for", "body": 'Breaking signals into simple waves so they can be cleaned up or compressed.'},
             {"heading": "How it helps people", "body": 'MP3 music, JPEG photos, MRI and ultrasound scans, and noise-cancelling headphones.'},
-            {"heading": "Going deeper", "body": 'Adding more sine harmonics gets closer and closer to a square wave - the core idea behind signal processing. (Yr 11-12)'},
+            {"heading": "Going deeper", "body": 'Adding more sine harmonics gets closer and closer to a square wave - the core idea behind signal processing. (Senior secondary and above)'},
         ],
     }

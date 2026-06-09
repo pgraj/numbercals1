@@ -48,6 +48,6 @@ def compute(**kwargs):
             {"heading": "Who uses it", "body": 'Statisticians, financial analysts, geneticists, engineers.'},
             {"heading": "What it is for", "body": 'The numbers that appear when you expand (a + b) to a power, used all through probability.'},
             {"heading": "How it helps people", "body": 'Insurance and risk models, finance, genetics predictions, and quality control in factories.'},
-            {"heading": "Going deeper", "body": "The entries are the binomial coefficients 'n choose k' - the bridge between Pascal's triangle, factorials and probability. (Yr 10-12)"},
+            {"heading": "Going deeper", "body": "The entries are the binomial coefficients 'n choose k' - the bridge between Pascal's triangle, factorials and probability. (Senior secondary and above)"},
         ],
     }
