@@ -24,7 +24,7 @@ CONTACT_EMAIL = "hello@numbercals.com"
 # Ad monetisation. Leave ADSENSE_CLIENT empty until approved; the ad slot
 # renders nothing while empty, so the skin is never broken by a raw ad box.
 # When ready, set e.g. ADSENSE_CLIENT = "ca-pub-XXXXXXXXXXXXXXXX".
-ADSENSE_CLIENT = ""
+ADSENSE_CLIENT = "ca-pub-8596375967865527"
 AD_SLOT = ""
 
 
